@@ -34,7 +34,7 @@ fn main() {
 
             decoder.read_to_string(&mut extracted_content).unwrap();
 
-            println!("{extracted_content}");
+            print!("{extracted_content}");
         }
     } else {
         println!("unknown command: {}", args[1]);
