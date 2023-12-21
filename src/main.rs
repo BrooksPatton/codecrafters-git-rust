@@ -2,6 +2,9 @@ use std::env;
 use std::fs;
 use std::io::Read;
 
+use flate2::read::GzDecoder;
+use flate2::read::ZlibDecoder;
+
 fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
@@ -22,9 +25,16 @@ fn main() {
             let file_name = &hash[2..];
             let path = format!(".git/objects/{folder_name}/{file_name}");
             let mut object = fs::File::open(&path).unwrap();
-            let mut content = String::new();
-            object.read_to_string(&mut content).unwrap();
-            println!("{content}");
+            let mut content: Vec<u8> = vec![];
+            let mut extracted_content = String::new();
+
+            object.read_to_end(&mut content).unwrap();
+
+            let mut decoder = ZlibDecoder::new(content.as_slice());
+
+            decoder.read_to_string(&mut extracted_content).unwrap();
+
+            println!("{extracted_content}");
         }
     } else {
         println!("unknown command: {}", args[1]);
