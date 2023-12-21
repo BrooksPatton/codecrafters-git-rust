@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io::Read;
 
 fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -19,7 +20,11 @@ fn main() {
             // the first two characters of the hash are the folder name, and the rest are the file name
             let folder_name = &hash[0..2];
             let file_name = &hash[2..];
-            dbg!(folder_name, file_name);
+            let path = format!(".git/objects/{folder_name}/{file_name}");
+            let mut object = fs::File::open(&path).unwrap();
+            let mut content = String::new();
+            object.read_to_string(&mut content).unwrap();
+            println!("{content}");
         }
     } else {
         println!("unknown command: {}", args[1]);
