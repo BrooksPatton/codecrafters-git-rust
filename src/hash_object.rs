@@ -9,10 +9,10 @@ pub fn hash_object(args: &[String]) {
         "-w" => {
             let filename = &args[1];
             let file = std::fs::read(filename).unwrap();
-            let sha = get_sha(&file);
+            let compressed_file = compress(&file);
+            let sha = get_sha(&compressed_file);
 
             let folder_path = create_folder(&sha);
-            let compressed_file = compress(&file);
             print_sha(&sha);
             save_file(&compressed_file, &folder_path, get_file_sha(&sha));
         }
