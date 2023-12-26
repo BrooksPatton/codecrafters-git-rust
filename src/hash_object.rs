@@ -1,4 +1,4 @@
-use std::{fs::DirBuilder, io::Write};
+use std::{fs::DirBuilder, io::Write, path::Path};
 
 use flate2::{write::ZlibEncoder, Compression};
 use hex::ToHex;
@@ -9,9 +9,13 @@ pub fn hash_object(args: &[String]) {
         "-w" => {
             let filename = &args[1];
             let file = std::fs::read(filename).unwrap();
-            let compressed_file = compress(&file);
-            let sha = get_sha(&compressed_file);
+            let header = get_header(&file);
+            let mut content = header.into_bytes();
 
+            content.extend(file);
+
+            let sha = get_sha(&content);
+            let compressed_file = compress(&content);
             let folder_path = create_folder(&sha);
             print_sha(&sha);
             save_file(&compressed_file, &folder_path, get_file_sha(&sha));
@@ -45,13 +49,27 @@ fn print_sha(sha: &str) {
     println!("{sha}");
 }
 
+/// Save the file to disk, if it already exists don't do anything
 fn save_file(file: &[u8], folder_path: &str, file_sha: &str) {
     let path = format!("{folder_path}/{file_sha}");
+
+    let path = Path::new(&path);
+    if path.exists() {
+        return;
+    }
+
     std::fs::write(path, file).unwrap();
 }
 
 fn get_file_sha(sha: &str) -> &str {
     &sha[2..]
+}
+
+fn get_header(content: &[u8]) -> String {
+    let object_type = "blob";
+    let size = content.len();
+
+    format!("{object_type} {size}\0")
 }
 
 #[cfg(test)]
@@ -65,5 +83,14 @@ mod tests {
         let result = get_file_sha(sha);
 
         assert_eq!(result, expected_file_sha);
+    }
+
+    #[test]
+    fn should_create_blob_header() {
+        let content = "what is up, doc?";
+        let expected_result = "blob 16\0";
+        let result = get_header(content.as_bytes());
+
+        assert_eq!(result, expected_result);
     }
 }
