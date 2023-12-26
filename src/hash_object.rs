@@ -1,4 +1,8 @@
-use std::{fs::DirBuilder, io::Write, path::Path};
+use std::{
+    fs::DirBuilder,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use flate2::{write::ZlibEncoder, Compression};
 use hex::ToHex;
@@ -18,7 +22,7 @@ pub fn hash_object(args: &[String]) {
             let compressed_file = compress(&content);
             let folder_path = create_folder(&sha);
             print_sha(&sha);
-            save_file(&compressed_file, &folder_path, get_file_sha(&sha));
+            save_file(&compressed_file, folder_path, get_file_sha(&sha));
         }
         _ => eprintln!("Unknown option"),
     }
@@ -36,9 +40,10 @@ fn compress(file: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn create_folder(sha: &str) -> String {
+fn create_folder(sha: &str) -> PathBuf {
     // normally we should find the .git folder in case we are nested in. Let's yolo because why not? :)
-    let path = format!(".git/objects/{}", &sha[0..2]);
+    // let path = format!(".git/objects/{}", &sha[0..2]);
+    let path = Path::new(".git").join("objects").join(&sha[0..2]);
     // we need to handle the case that the folder already exists. If that is so, we don't want to crash.
     DirBuilder::new().recursive(true).create(&path).unwrap();
 
@@ -50,10 +55,9 @@ fn print_sha(sha: &str) {
 }
 
 /// Save the file to disk, if it already exists don't do anything
-fn save_file(file: &[u8], folder_path: &str, file_sha: &str) {
-    let path = format!("{folder_path}/{file_sha}");
+fn save_file(file: &[u8], mut path: PathBuf, file_sha: &str) {
+    path.push(file_sha);
 
-    let path = Path::new(&path);
     if path.exists() {
         return;
     }
