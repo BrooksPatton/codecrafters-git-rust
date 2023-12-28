@@ -19,6 +19,18 @@ pub fn decompress(bytes: &[u8]) -> Vec<u8> {
     result
 }
 
+pub fn index_of_next_null(bytes: &[u8], offset_index: usize) -> Option<usize> {
+    if let Some(index) = bytes
+        .iter()
+        .skip(offset_index)
+        .position(|&byte| byte == b'\0')
+    {
+        Some(index + offset_index)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -56,5 +68,25 @@ mod tests {
         let de_compressed = decompress(&compressed);
 
         assert_eq!(de_compressed, de_compressed_string.as_bytes());
+    }
+
+    #[test]
+    fn should_return_index_of_next_null() {
+        let string = "eanfphensrtduyfj\0rsiueaptyrafupgdreif\0";
+        let expected_index = 16;
+        let result = index_of_next_null(string.as_bytes(), 0).unwrap();
+
+        assert_eq!(result, expected_index);
+    }
+
+    #[test]
+    fn should_return_index_of_second_null() {
+        let string = "eanfphensrtduyfj\0rsiueaptyrafupgdreif\0aoiresth";
+        let string_bytes = string.as_bytes();
+        let first_index = index_of_next_null(string_bytes, 0).unwrap();
+        let expected_index = 37;
+        let result = index_of_next_null(string_bytes, first_index + 1).unwrap();
+
+        assert_eq!(result, expected_index);
     }
 }
