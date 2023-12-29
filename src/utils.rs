@@ -19,16 +19,10 @@ pub fn decompress(bytes: &[u8]) -> Vec<u8> {
     result
 }
 
-pub fn index_of_next_null(bytes: &[u8], offset_index: usize) -> Option<usize> {
-    if let Some(index) = bytes
-        .iter()
-        .skip(offset_index)
-        .position(|&byte| byte == b'\0')
-    {
-        Some(index + offset_index)
-    } else {
-        None
-    }
+pub fn next_chunk(bytes: &[u8], offset_nulls: usize) -> Option<&[u8]> {
+    let mut result = bytes.split(|&bytes| bytes == b'\0');
+
+    result.nth(offset_nulls)
 }
 
 #[cfg(test)]
@@ -71,22 +65,21 @@ mod tests {
     }
 
     #[test]
-    fn should_return_index_of_next_null() {
+    fn should_return_chunk_before_first_null() {
         let string = "eanfphensrtduyfj\0rsiueaptyrafupgdreif\0";
-        let expected_index = 16;
-        let result = index_of_next_null(string.as_bytes(), 0).unwrap();
+        let expected_value = "eanfphensrtduyfj".as_bytes();
+        let result = next_chunk(&string.as_bytes(), 0).unwrap();
 
-        assert_eq!(result, expected_index);
+        assert_eq!(result, expected_value);
     }
 
     #[test]
     fn should_return_index_of_second_null() {
         let string = "eanfphensrtduyfj\0rsiueaptyrafupgdreif\0aoiresth";
         let string_bytes = string.as_bytes();
-        let first_index = index_of_next_null(string_bytes, 0).unwrap();
-        let expected_index = 37;
-        let result = index_of_next_null(string_bytes, first_index + 1).unwrap();
+        let expected_result = "rsiueaptyrafupgdreif".as_bytes();
+        let result = next_chunk(string_bytes, 1).unwrap();
 
-        assert_eq!(result, expected_index);
+        assert_eq!(result, expected_result);
     }
 }

@@ -1,11 +1,6 @@
-use core::panic;
 use std::{fs::File, io::Read, path::Path};
 
-use serde::{Deserialize, Serialize};
-
-use crate::utils::{
-    decompress, get_object_directory_name, get_object_file_name, index_of_next_null,
-};
+use crate::utils::{decompress, get_object_directory_name, get_object_file_name, next_chunk};
 
 pub fn ls_tree(args: &[String]) {
     let _option = &args[0];
@@ -22,7 +17,40 @@ pub fn ls_tree(args: &[String]) {
     file.read_to_end(&mut compressed_bytes).unwrap();
 
     let bytes = decompress(&compressed_bytes);
-    let tree_object = TreeObject::new(&bytes);
+    let mut bytes_slice = &bytes[..];
+    // let mut trees_objects = vec![];
+
+    let header_bytes = next_chunk(&bytes_slice, 0).unwrap();
+    let header = bytes_to_string(&header_bytes);
+    let null_index = bytes_slice.iter().position(|&byte| byte == b'\0').unwrap();
+    bytes_slice = &bytes[null_index + 1..];
+
+    let mode_bytes = next_chunk(&bytes_slice, 0).unwrap();
+    let mode = bytes_to_string(&mode_bytes);
+    let null_index = bytes_slice.iter().position(|&byte| byte == b'\0').unwrap();
+
+    let null_index = null_index + 20;
+    bytes_slice = &bytes[null_index + 1..];
+
+    let header2_bytes = next_chunk(&bytes_slice, 0).unwrap();
+    let header2 = bytes_to_string(&header2_bytes);
+
+    dbg!(header, mode, header2);
+
+    // more black box testing needed
+
+    // for bytes in bytes.split(|&byte| byte == b'\n') {
+    //     let mode_bytes = next_chunk(&bytes, 0).unwrap();
+
+    //     trees_objects.push(TreeObject::new(header_bytes, mode_bytes));
+    //     dbg!(&trees_objects);
+    // }
+
+    // let (tree_object, last_used_index) = TreeObject::new(&bytes);
+    // let (tree_object_two, second_last_used_index) = TreeObject::new(&bytes[last_used_index + 2..]);
+
+    // dbg!(tree_object);
+    // dbg!(tree_object_two);
 
     // figure out where one object begins and ends and then loop throug everything
     // loop {}
@@ -39,9 +67,7 @@ struct TreeObject {
 impl TreeObject {
     // potentially we can return Self and the index that we last used for the \0.
     // Then we can use that to generate the next object???????
-    pub fn new(bytes: &[u8]) -> Self {
-        let header_null_index = index_of_next_null(&bytes, 0).expect("don't have a header");
-        let mut header_bytes = &bytes[0..header_null_index];
+    pub fn new(mut header_bytes: &[u8], mut mode_bytes: &[u8]) -> Self {
         let mut header = String::new();
 
         header_bytes.read_to_string(&mut header).unwrap();
@@ -50,14 +76,9 @@ impl TreeObject {
         let object_type = header.next().unwrap().to_owned();
         let size = header.next().unwrap().parse().unwrap();
 
-        let mode_null_index =
-            index_of_next_null(&bytes, header_null_index + 1).expect("doesn't have a mode");
-        let mut mode_and_filename_bytes = &bytes[header_null_index + 1..mode_null_index];
         let mut mode_and_filename = String::new();
 
-        mode_and_filename_bytes
-            .read_to_string(&mut mode_and_filename)
-            .unwrap();
+        mode_bytes.read_to_string(&mut mode_and_filename).unwrap();
 
         let mut mode_and_filename = mode_and_filename.trim().split_whitespace();
         let mode = mode_and_filename.next().unwrap().to_owned();
@@ -70,4 +91,12 @@ impl TreeObject {
             filename,
         }
     }
+}
+
+fn bytes_to_string(mut bytes: &[u8]) -> String {
+    let mut result = String::new();
+
+    bytes.read_to_string(&mut result).unwrap();
+
+    result
 }
