@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 
@@ -6,13 +6,13 @@ use crate::hash_object::hash_object;
 
 pub fn write_tree() -> Result<String> {
     // files and folders in the current directory
-    let path = Path::new("./");
-    let checksum = write_tree_object(path)?;
+    let path = PathBuf::new().join(".");
+    let checksum = write_tree_object(&path)?;
 
     Ok(checksum)
 }
 
-fn write_tree_object(path: &Path) -> Result<String> {
+fn write_tree_object(path: &PathBuf) -> Result<String> {
     let dir = std::fs::read_dir(path).unwrap();
     let mut objects = vec![];
 
@@ -26,7 +26,9 @@ fn write_tree_object(path: &Path) -> Result<String> {
                 let checksum = hash_object(&["-w".to_owned(), name.clone()])?;
                 TreeObject::new(true, checksum, name)
             } else {
-                TreeObject::new(false, "???".to_owned(), name)
+                let dir_path = path.clone().join(&name);
+                let checksum = write_tree_object(&dir_path)?;
+                TreeObject::new(false, checksum, name)
             };
 
             objects.push(file_object);

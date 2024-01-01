@@ -9,6 +9,8 @@ use flate2::{write::ZlibEncoder, Compression};
 use hex::ToHex;
 use sha1::{Digest, Sha1};
 
+// Update hash object to take in a path, and go from there.
+// That way we can call this from write-tree function
 pub fn hash_object(args: &[String]) -> Result<String> {
     match args[0].as_str() {
         "-w" => {
