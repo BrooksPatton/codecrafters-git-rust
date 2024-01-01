@@ -4,11 +4,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::{bail, Result};
 use flate2::{write::ZlibEncoder, Compression};
 use hex::ToHex;
 use sha1::{Digest, Sha1};
 
-pub fn hash_object(args: &[String]) {
+pub fn hash_object(args: &[String]) -> Result<String> {
     match args[0].as_str() {
         "-w" => {
             let filename = &args[1];
@@ -21,10 +22,10 @@ pub fn hash_object(args: &[String]) {
             let sha = get_sha(&content);
             let compressed_file = compress(&content);
             let folder_path = create_folder(&sha);
-            print_sha(&sha);
             save_file(&compressed_file, folder_path, get_file_sha(&sha));
+            Ok(sha)
         }
-        _ => eprintln!("Unknown option"),
+        _ => bail!("Unknown option"),
     }
 }
 
