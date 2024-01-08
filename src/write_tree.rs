@@ -14,6 +14,7 @@ pub fn write_tree() -> Result<String> {
 }
 
 fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
+    println!("writing tree object: {:?}", &path);
     let mut objects = vec![];
     for object in WalkBuilder::new(&path)
         .hidden(false)
@@ -35,8 +36,7 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
 
             Some(TreeObject::new(true, checksum, name))
         } else {
-            let dir_path = file_path.join(&name);
-            if let Some(checksum) = write_tree_object(&dir_path)? {
+            if let Some(checksum) = write_tree_object(&file_path.to_path_buf())? {
                 Some(TreeObject::new(false, checksum, name))
             } else {
                 None
