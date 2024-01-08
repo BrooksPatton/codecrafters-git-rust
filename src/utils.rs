@@ -1,6 +1,12 @@
-use std::io::Read;
-
+use anyhow::{bail, Result};
 use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use sha1::{Digest, Sha1};
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 pub fn get_object_directory_name(hash: &str) -> String {
     hash[0..2].to_owned()
@@ -23,6 +29,52 @@ pub fn next_chunk(bytes: &[u8], offset_nulls: usize) -> Option<&[u8]> {
     let mut result = bytes.split(|&bytes| bytes == b'\0');
 
     result.nth(offset_nulls)
+}
+
+pub fn compress(content: &[u8]) -> Result<Vec<u8>> {
+    let mut encoded = Vec::new();
+    let mut encoder = ZlibEncoder::new(&mut encoded, Compression::default());
+
+    encoder.write_all(content)?;
+
+    Ok(encoder.finish()?.to_owned())
+}
+
+pub fn get_hash(content: &[u8]) -> Result<Vec<u8>> {
+    let mut hasher = Sha1::new();
+
+    hasher.update(content);
+
+    let hash = hasher.finalize()[..].to_vec();
+    Ok(hash)
+}
+
+pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
+    let compressed = compress(content)?;
+    let hash = get_hash(&compressed)?;
+    let hash_utf8 = hex::encode(&hash);
+    let directory_name = get_object_directory_name(&hash_utf8);
+    let file_name = get_object_file_name(&hash_utf8);
+    let mut path = PathBuf::new()
+        .join(".git")
+        .join("objects")
+        .join(directory_name);
+
+    let Ok(directory_exists) = path.try_exists() else {
+        bail!("Error checking if directory exists");
+    };
+
+    if !directory_exists {
+        println!("directory doesn't exist, creating: {path:?}");
+        std::fs::DirBuilder::new().create(&path)?;
+    }
+
+    path = path.join(&file_name);
+
+    println!("writing file to: {path:?}");
+    std::fs::write(path, &compressed)?;
+
+    Ok(hash)
 }
 
 #[cfg(test)]
@@ -82,4 +134,15 @@ mod tests {
 
         assert_eq!(result, expected_result);
     }
+
+    // #[test]
+    // fn should_get_hash_from_string() -> Result<()> {
+    //     let string_to_hash = b"hello world\n";
+    //     let expected_result = "22596363b3de40b06f981fb85d82312e8c0ed511";
+    //     let result = get_hash(string_to_hash)?;
+
+    //     assert_eq!(result, expected_result);
+
+    //     Ok(())
+    // }
 }

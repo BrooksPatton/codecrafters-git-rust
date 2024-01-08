@@ -4,14 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use flate2::{write::ZlibEncoder, Compression};
-use hex::ToHex;
 use sha1::{Digest, Sha1};
 
 // Update hash object to take in a path, and go from there.
 // That way we can call this from write-tree function
-pub fn hash_object(write_flag: bool, mut path: PathBuf) -> Result<String> {
+pub fn hash_object(write_flag: bool, path: PathBuf) -> Result<Vec<u8>> {
     if write_flag {
         let file = std::fs::read(path).unwrap();
         let header = get_header(&file);
@@ -20,19 +19,20 @@ pub fn hash_object(write_flag: bool, mut path: PathBuf) -> Result<String> {
         content.extend(file);
 
         let sha = get_sha(&content);
+        let sha_hex = hex::encode(&sha);
         let compressed_file = compress(&content);
-        let folder_path = create_folder(&sha);
-        save_file(&compressed_file, folder_path, get_file_sha(&sha));
+        let folder_path = create_folder(&sha_hex);
+        save_file(&compressed_file, folder_path, get_file_sha(&sha_hex));
         Ok(sha)
     } else {
         unimplemented!();
     }
 }
 
-fn get_sha(file: &[u8]) -> String {
+fn get_sha(file: &[u8]) -> Vec<u8> {
     let mut hasher = Sha1::new();
     hasher.update(file);
-    hasher.finalize().encode_hex::<String>()
+    hasher.finalize().to_vec()
 }
 
 fn compress(file: &[u8]) -> Vec<u8> {
@@ -49,10 +49,6 @@ fn create_folder(sha: &str) -> PathBuf {
     DirBuilder::new().recursive(true).create(&path).unwrap();
 
     path
-}
-
-fn print_sha(sha: &str) {
-    println!("{sha}");
 }
 
 /// Save the file to disk, if it already exists don't do anything

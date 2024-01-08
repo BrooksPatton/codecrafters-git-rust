@@ -16,7 +16,7 @@ fn main() {
             let write_flag = args[2].as_str() == "-w";
             let path = PathBuf::new();
             let checksum = hash_object(write_flag, path).unwrap();
-            println!("{checksum}");
+            println!("{checksum:?}");
         }
         "ls-tree" => ls_tree(rest_of_args),
         "write-tree" => {

@@ -1,83 +1,99 @@
-use std::path::{Path, PathBuf};
+use std::{fmt::Display, path::PathBuf};
 
-use anyhow::{anyhow, bail, Result};
-use ignore::{Walk, WalkBuilder};
+use anyhow::{Context, Result};
+use ignore::WalkBuilder;
 
-use crate::hash_object::hash_object;
+use crate::{hash_object::hash_object, utils::save_to_disk};
 
 pub fn write_tree() -> Result<String> {
     // files and folders in the current directory
     let path = PathBuf::new().join(".");
-    let checksum = write_tree_object(&path)?;
+    let checksum = write_tree_object(&path)?.expect("getting checksum after writing all trees");
 
-    Ok(checksum)
+    Ok(hex::encode(checksum))
 }
 
-fn write_tree_object(path: &PathBuf) -> Result<String> {
-    let dir = std::fs::read_dir(path).unwrap();
+fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
     let mut objects = vec![];
-    for object in WalkBuilder::new(&path).build() {
-        dbg!("walking without .gitignore: ", object?);
-    }
+    for object in WalkBuilder::new(&path)
+        .hidden(false)
+        .max_depth(Some(1))
+        .build()
+        .skip(1)
+    {
+        let dir_object = object?;
+        let file_path = dir_object.path();
+        let metadata = dir_object.metadata().unwrap();
+        let name = dir_object
+            .file_name()
+            .to_str()
+            .context("Could not get file name from object")?
+            .to_owned();
 
-    todo!();
-    for dir_object_result in dir.into_iter() {
-        if let Ok(dir_object) = dir_object_result {
-            let file_path = dir_object.path();
-            let metadata = dir_object.metadata().unwrap();
-            let name = dir_object
-                .file_name()
-                .into_string()
-                .map_err(|_error| anyhow!("Could not get file name from object"))?;
+        let file_object = if metadata.is_file() {
+            let checksum = hash_object(true, file_path.to_path_buf())?;
 
-            let file_object = if metadata.is_file() {
-                let checksum = hash_object(true, file_path)?;
-                TreeObject::new(true, checksum, name)
-            } else {
-                let dir_path = path.clone().join(&name);
-                if dir_path
-                    .iter()
-                    .filter(|component| *component == "target")
-                    .count()
-                    > 0
-                {
-                    // dbg!("found target, skipping...");
-                    continue;
-                }
-                let checksum = write_tree_object(&dir_path)?;
-                TreeObject::new(false, checksum, name)
-            };
-
-            objects.push(file_object);
+            Some(TreeObject::new(true, checksum, name))
         } else {
-            bail!("could not load directory object");
-        }
+            let dir_path = file_path.join(&name);
+            if let Some(checksum) = write_tree_object(&dir_path)? {
+                Some(TreeObject::new(false, checksum, name))
+            } else {
+                None
+            }
+        };
+
+        objects.extend(file_object);
     }
 
-    // dbg!(objects);
+    objects.sort_unstable_by_key(|object| object.name.clone());
+    if objects.is_empty() {
+        Ok(None)
+    } else {
+        let tree_file = create_tree_file(&objects);
+        let hash = save_to_disk(&tree_file)?;
 
-    todo!()
+        Ok(Some(hash))
+    }
 }
 
 #[derive(Debug)]
 struct TreeObject {
     mode: String,
-    object_type: TreeObjectType,
-    checksum: String,
+    checksum: Vec<u8>,
     name: String,
 }
 
 impl TreeObject {
-    pub fn new(is_file: bool, checksum: String, name: String) -> Self {
+    pub fn new(is_file: bool, checksum: Vec<u8>, name: String) -> Self {
         let object_type = TreeObjectType::new(is_file);
         let mode = object_type.mode();
 
         Self {
             mode,
-            object_type,
             checksum,
             name,
         }
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+
+        let mode = format!("{} ", &self.mode);
+        bytes.extend(mode.as_bytes());
+
+        let name = format!("{}\0", &self.name);
+        bytes.extend(name.as_bytes());
+
+        bytes.extend(&self.checksum);
+
+        bytes
+    }
+}
+
+impl Display for TreeObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}\0{:?}", &self.mode, &self.name, &self.checksum)
     }
 }
 
@@ -104,3 +120,35 @@ impl TreeObjectType {
         .to_owned()
     }
 }
+
+impl Display for TreeObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Blob => "blob",
+            Self::Tree => "tree",
+        };
+
+        write!(f, "{name}")
+    }
+}
+
+fn create_tree_file(objects: &[TreeObject]) -> Vec<u8> {
+    let mut tree_file = vec![];
+
+    let objects = objects
+        .iter()
+        .map(|object| object.as_bytes())
+        .collect::<Vec<Vec<u8>>>();
+    let size = objects.iter().fold(0, |acc, object| acc + object.len());
+
+    tree_file.extend(format!("tree {size}\0").as_bytes());
+    for object in objects {
+        tree_file.extend(object)
+    }
+
+    tree_file
+}
+
+// fn write_tree_to_file(content: &str, hash: &str) -> Result<()> {
+
+// }
