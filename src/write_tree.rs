@@ -115,7 +115,7 @@ impl TreeObjectType {
     pub fn mode(&self) -> String {
         match self {
             Self::Blob => "100644",
-            Self::Tree => "040000",
+            Self::Tree => "40000",
         }
         .to_owned()
     }
