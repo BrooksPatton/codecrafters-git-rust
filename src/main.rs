@@ -2,7 +2,7 @@ use git_starter_rust::{
     cat_file::cat_file, hash_object::hash_object, init::init, ls_tree::ls_tree,
     write_tree::write_tree,
 };
-use std::env;
+use std::{env, path::PathBuf};
 
 fn main() {
     // Uncomment this block to pass the first stage
@@ -13,7 +13,9 @@ fn main() {
         "init" => init(),
         "cat-file" => cat_file(rest_of_args),
         "hash-object" => {
-            let checksum = hash_object(rest_of_args).unwrap();
+            let write_flag = args[2].as_str() == "-w";
+            let path = PathBuf::new();
+            let checksum = hash_object(write_flag, path).unwrap();
             println!("{checksum}");
         }
         "ls-tree" => ls_tree(rest_of_args),

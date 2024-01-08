@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use ignore::{Walk, WalkBuilder};
 
 use crate::hash_object::hash_object;
 
@@ -15,18 +16,34 @@ pub fn write_tree() -> Result<String> {
 fn write_tree_object(path: &PathBuf) -> Result<String> {
     let dir = std::fs::read_dir(path).unwrap();
     let mut objects = vec![];
+    for object in WalkBuilder::new(&path).build() {
+        dbg!("walking without .gitignore: ", object?);
+    }
 
+    todo!();
     for dir_object_result in dir.into_iter() {
         if let Ok(dir_object) = dir_object_result {
-            let file_name = dir_object.file_name();
+            let file_path = dir_object.path();
             let metadata = dir_object.metadata().unwrap();
-            let name = file_name.into_string().unwrap();
+            let name = dir_object
+                .file_name()
+                .into_string()
+                .map_err(|_error| anyhow!("Could not get file name from object"))?;
 
             let file_object = if metadata.is_file() {
-                let checksum = hash_object(&["-w".to_owned(), name.clone()])?;
+                let checksum = hash_object(true, file_path)?;
                 TreeObject::new(true, checksum, name)
             } else {
                 let dir_path = path.clone().join(&name);
+                if dir_path
+                    .iter()
+                    .filter(|component| *component == "target")
+                    .count()
+                    > 0
+                {
+                    // dbg!("found target, skipping...");
+                    continue;
+                }
                 let checksum = write_tree_object(&dir_path)?;
                 TreeObject::new(false, checksum, name)
             };
@@ -37,7 +54,7 @@ fn write_tree_object(path: &PathBuf) -> Result<String> {
         }
     }
 
-    dbg!(objects);
+    // dbg!(objects);
 
     todo!()
 }

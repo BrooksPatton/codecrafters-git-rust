@@ -11,23 +11,21 @@ use sha1::{Digest, Sha1};
 
 // Update hash object to take in a path, and go from there.
 // That way we can call this from write-tree function
-pub fn hash_object(args: &[String]) -> Result<String> {
-    match args[0].as_str() {
-        "-w" => {
-            let filename = &args[1];
-            let file = std::fs::read(filename).unwrap();
-            let header = get_header(&file);
-            let mut content = header.into_bytes();
+pub fn hash_object(write_flag: bool, mut path: PathBuf) -> Result<String> {
+    if write_flag {
+        let file = std::fs::read(path).unwrap();
+        let header = get_header(&file);
+        let mut content = header.into_bytes();
 
-            content.extend(file);
+        content.extend(file);
 
-            let sha = get_sha(&content);
-            let compressed_file = compress(&content);
-            let folder_path = create_folder(&sha);
-            save_file(&compressed_file, folder_path, get_file_sha(&sha));
-            Ok(sha)
-        }
-        _ => bail!("Unknown option"),
+        let sha = get_sha(&content);
+        let compressed_file = compress(&content);
+        let folder_path = create_folder(&sha);
+        save_file(&compressed_file, folder_path, get_file_sha(&sha));
+        Ok(sha)
+    } else {
+        unimplemented!();
     }
 }
 
