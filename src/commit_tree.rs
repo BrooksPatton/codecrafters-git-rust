@@ -3,7 +3,7 @@ use std::time::UNIX_EPOCH;
 use anyhow::Result;
 use hex::ToHex;
 
-use crate::utils::{compress, get_hash, save_to_disk};
+use crate::utils::save_to_disk;
 
 pub fn commit_tree(tree: &str, parent: &str, message: &str) -> Result<String> {
     let mut commit_body = vec![];
@@ -24,7 +24,7 @@ pub fn commit_tree(tree: &str, parent: &str, message: &str) -> Result<String> {
         )
         .into_bytes(),
     );
-    commit_body.extend(message.as_bytes());
+    commit_body.extend(format!("{message}\n").into_bytes());
 
     let size = commit_body.len();
     let mut commit = format!("commit {size}\0").into_bytes();
