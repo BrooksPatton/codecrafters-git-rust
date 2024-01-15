@@ -79,6 +79,14 @@ pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
     Ok(hash)
 }
 
+pub fn create_directory(path: &PathBuf) -> Result<()> {
+    if !path.exists() {
+        std::fs::DirBuilder::new().create(path)?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
