@@ -1,6 +1,6 @@
 use git_starter_rust::{
-    cat_file::cat_file, hash_object::hash_object, init::init, ls_tree::ls_tree,
-    write_tree::write_tree,
+    cat_file::cat_file, commit_tree::commit_tree, hash_object::hash_object, init::init,
+    ls_tree::ls_tree, write_tree::write_tree,
 };
 use hex::ToHex;
 use std::{env, path::PathBuf};
@@ -25,6 +25,22 @@ fn main() {
         "write-tree" => {
             let checksum = write_tree().unwrap();
             println!("{checksum}");
+        }
+        "commit-tree" => {
+            let tree = &args[2];
+            let parent = if &args[3] == "-p" {
+                &args[4]
+            } else {
+                panic!("missing parent argument");
+            };
+            let message = if &args[5] == "-m" {
+                &args[6]
+            } else {
+                panic!("missing message argument");
+            };
+            let hash = commit_tree(tree, parent, message).unwrap();
+
+            println!("{hash}");
         }
         _ => println!("unknown command: {}", args[1]),
     }

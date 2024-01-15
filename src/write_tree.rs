@@ -1,9 +1,8 @@
+use crate::{hash_object::hash_object, utils::save_to_disk};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use std::os::unix::prelude::PermissionsExt;
 use std::{fmt::Display, path::PathBuf};
-
-use crate::{hash_object::hash_object, utils::save_to_disk};
 
 pub fn write_tree() -> Result<String> {
     // files and folders in the current directory
