@@ -2,6 +2,7 @@ use git_starter_rust::{
     cat_file::cat_file, hash_object::hash_object, init::init, ls_tree::ls_tree,
     write_tree::write_tree,
 };
+use hex::ToHex;
 use std::{env, path::PathBuf};
 
 fn main() {
@@ -15,7 +16,9 @@ fn main() {
         "hash-object" => {
             let write_flag = args[2].as_str() == "-w";
             let path = PathBuf::new().join(&args[3]);
-            let checksum = hash_object(write_flag, path).unwrap();
+            let checksum = hash_object(write_flag, path)
+                .unwrap()
+                .encode_hex::<String>();
             println!("{checksum:?}");
         }
         "ls-tree" => ls_tree(rest_of_args),
