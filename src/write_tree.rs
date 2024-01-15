@@ -1,6 +1,7 @@
 use std::{fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result};
+use hex::ToHex;
 use ignore::WalkBuilder;
 
 use crate::{hash_object::hash_object, utils::save_to_disk};
@@ -33,10 +34,12 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
 
         let file_object = if metadata.is_file() {
             let checksum = hash_object(true, file_path.to_path_buf())?;
+            println!("name: {} - {}", &name, checksum.encode_hex::<String>());
 
             Some(TreeObject::new(true, checksum, name))
         } else {
             if let Some(checksum) = write_tree_object(&file_path.to_path_buf())? {
+                // dbg!(&name, checksum.encode_hex::<String>());
                 Some(TreeObject::new(false, checksum, name))
             } else {
                 None
