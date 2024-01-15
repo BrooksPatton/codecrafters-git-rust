@@ -50,8 +50,8 @@ pub fn get_hash(content: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
+    let hash = get_hash(content)?;
     let compressed = compress(content)?;
-    let hash = get_hash(&compressed)?;
     let hash_utf8 = hex::encode(&hash);
     let directory_name = get_object_directory_name(&hash_utf8);
     let file_name = get_object_file_name(&hash_utf8);
