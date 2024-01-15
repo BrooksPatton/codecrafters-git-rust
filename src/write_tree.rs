@@ -18,7 +18,6 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
     for object in WalkBuilder::new(&path)
         .hidden(false)
         .max_depth(Some(1))
-        .add_custom_ignore_filename(".git")
         .build()
         .skip(1)
     {
@@ -38,6 +37,10 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
 
             Some(TreeObject::new(true, checksum, name, mode))
         } else {
+            if name == ".git" {
+                continue;
+            }
+
             if let Some(checksum) = write_tree_object(&file_path.to_path_buf())? {
                 Some(TreeObject::new(false, checksum, name, mode))
             } else {
