@@ -14,7 +14,7 @@ fn main() {
         "cat-file" => cat_file(rest_of_args),
         "hash-object" => {
             let write_flag = args[2].as_str() == "-w";
-            let path = PathBuf::new();
+            let path = PathBuf::new().join(&args[3]);
             let checksum = hash_object(write_flag, path).unwrap();
             println!("{checksum:?}");
         }
