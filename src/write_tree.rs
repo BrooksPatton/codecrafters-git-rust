@@ -14,7 +14,6 @@ pub fn write_tree() -> Result<String> {
 }
 
 fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
-    println!("writing tree object: {:?}", &path);
     let mut objects = vec![];
     for object in WalkBuilder::new(&path)
         .hidden(false)

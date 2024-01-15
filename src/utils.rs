@@ -65,14 +65,12 @@ pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
     };
 
     if !directory_exists {
-        println!("directory doesn't exist, creating: {path:?}");
         std::fs::DirBuilder::new().create(&path)?;
     }
 
     path = path.join(&file_name);
 
     if path.exists() {
-        println!("path already exists, skipping");
         return Ok(hash);
     }
 
