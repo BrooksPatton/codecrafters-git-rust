@@ -71,7 +71,11 @@ pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
 
     path = path.join(&file_name);
 
-    println!("writing file to: {path:?}");
+    if path.exists() {
+        println!("path already exists, skipping");
+        return Ok(hash);
+    }
+
     std::fs::write(path, &compressed)?;
 
     Ok(hash)
