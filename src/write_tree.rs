@@ -1,13 +1,9 @@
+use anyhow::{Context, Result};
+use ignore::WalkBuilder;
+use std::os::unix::prelude::PermissionsExt;
 use std::{fmt::Display, path::PathBuf};
 
-use anyhow::{Context, Result};
-use hex::ToHex;
-use ignore::WalkBuilder;
-
-use crate::{
-    hash_object::hash_object,
-    utils::{get_hash, save_to_disk},
-};
+use crate::{hash_object::hash_object, utils::save_to_disk};
 
 pub fn write_tree() -> Result<String> {
     // files and folders in the current directory
@@ -35,16 +31,15 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
             .context("Could not get file name from object")?
             .to_owned();
 
+        let mode = metadata.permissions().mode();
         let file_object = if metadata.is_file() {
             // this is working correctly
             let checksum = hash_object(true, file_path.to_path_buf())?;
 
-            Some(TreeObject::new(true, checksum, name))
+            Some(TreeObject::new(true, checksum, name, mode))
         } else {
             if let Some(checksum) = write_tree_object(&file_path.to_path_buf())? {
-                println!("tree: {} - {}", &name, checksum.encode_hex::<String>());
-                // dbg!(&name, checksum.encode_hex::<String>());
-                Some(TreeObject::new(false, checksum, name))
+                Some(TreeObject::new(false, checksum, name, mode))
             } else {
                 None
             }
@@ -72,8 +67,8 @@ struct TreeObject {
 }
 
 impl TreeObject {
-    pub fn new(is_file: bool, checksum: Vec<u8>, name: String) -> Self {
-        let object_type = TreeObjectType::new(is_file);
+    pub fn new(is_file: bool, checksum: Vec<u8>, name: String, mode: u32) -> Self {
+        let object_type = TreeObjectType::new(is_file, mode);
         let mode = object_type.mode();
 
         Self {
@@ -106,33 +101,38 @@ impl Display for TreeObject {
 
 #[derive(Debug)]
 enum TreeObjectType {
-    Blob,
-    Tree,
+    Blob(&'static str),
+    Tree(&'static str),
 }
 
 impl TreeObjectType {
-    pub fn new(is_file: bool) -> Self {
+    pub fn new(is_file: bool, mode: u32) -> Self {
         if is_file {
-            Self::Blob
+            let mode = if mode & 0o100 == 0o100 {
+                "100755"
+            } else {
+                "100644"
+            };
+            Self::Blob(mode)
         } else {
-            Self::Tree
+            Self::Tree("40000")
         }
     }
 
     pub fn mode(&self) -> String {
         match self {
-            Self::Blob => "100644",
-            Self::Tree => "40000",
+            Self::Blob(mode) => mode,
+            Self::Tree(mode) => mode,
         }
-        .to_owned()
+        .to_string()
     }
 }
 
 impl Display for TreeObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
-            Self::Blob => "blob",
-            Self::Tree => "tree",
+            Self::Blob(_) => "blob",
+            Self::Tree(_) => "tree",
         };
 
         write!(f, "{name}")
