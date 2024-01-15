@@ -4,7 +4,10 @@ use anyhow::{Context, Result};
 use hex::ToHex;
 use ignore::WalkBuilder;
 
-use crate::{hash_object::hash_object, utils::save_to_disk};
+use crate::{
+    hash_object::hash_object,
+    utils::{get_hash, save_to_disk},
+};
 
 pub fn write_tree() -> Result<String> {
     // files and folders in the current directory
@@ -33,8 +36,8 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
             .to_owned();
 
         let file_object = if metadata.is_file() {
+            // this is working correctly
             let checksum = hash_object(true, file_path.to_path_buf())?;
-            println!("blob: {} - {}", &name, checksum.encode_hex::<String>());
 
             Some(TreeObject::new(true, checksum, name))
         } else {
@@ -55,7 +58,8 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
         Ok(None)
     } else {
         let tree_file = create_tree_file(&objects);
-        let hash = save_to_disk(&tree_file)?;
+        let hash = get_hash(&tree_file)?;
+        save_to_disk(&tree_file)?;
 
         Ok(Some(hash))
     }
