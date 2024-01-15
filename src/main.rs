@@ -1,6 +1,6 @@
 use git_starter_rust::{
-    cat_file::cat_file, commit_tree::commit_tree, hash_object::hash_object, init::init,
-    ls_tree::ls_tree, write_tree::write_tree,
+    cat_file::cat_file, clone::clone, commit_tree::commit_tree, hash_object::hash_object,
+    init::init, ls_tree::ls_tree, write_tree::write_tree,
 };
 use hex::ToHex;
 use std::{env, path::PathBuf};
@@ -41,6 +41,12 @@ fn main() {
             let hash = commit_tree(tree, parent, message).unwrap();
 
             println!("{hash}");
+        }
+        "clone" => {
+            let uri = &args[2];
+            let target_directory = &args[3];
+
+            clone(uri, target_directory).unwrap();
         }
         _ => println!("unknown command: {}", args[1]),
     }
