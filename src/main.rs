@@ -5,7 +5,8 @@ use git_starter_rust::{
 use hex::ToHex;
 use std::{env, path::PathBuf};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Uncomment this block to pass the first stage
     let args: Vec<String> = env::args().collect();
     let rest_of_args = &args[2..];
@@ -46,7 +47,7 @@ fn main() {
             let uri = &args[2];
             let target_directory = &args[3];
 
-            clone(uri, target_directory).unwrap();
+            clone(uri, target_directory).await.unwrap();
         }
         _ => println!("unknown command: {}", args[1]),
     }
