@@ -12,7 +12,10 @@ async fn main() {
     let rest_of_args = &args[2..];
 
     match args[1].as_str() {
-        "init" => init(),
+        "init" => {
+            let path = PathBuf::default();
+            init(path);
+        }
         "cat-file" => cat_file(rest_of_args),
         "hash-object" => {
             let write_flag = args[2].as_str() == "-w";

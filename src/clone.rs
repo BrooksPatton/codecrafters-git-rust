@@ -5,20 +5,28 @@ use reqwest::get;
 use std::path::Path;
 use tokio::sync::broadcast;
 
+use crate::init;
+use crate::utils;
 use crate::utils::create_directory;
+use crate::utils::decompress;
 
 pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
     // create directory
     let target_directory = Path::new(".").join(target_dir);
 
     create_directory(&target_directory)?;
+    init::init(target_directory);
 
-    discover_references(uri).await?;
+    // let refs = discover_references(uri).await?;
+    // let commit = get_commit(&refs[0].commit_hash, uri).await?;
+    // let commit_ref = CommitRef::new(commit)?;
+
+    // dbg!(commit_ref);
 
     Ok(())
 }
 
-async fn discover_references(repo_uri: &str) -> Result<()> {
+async fn discover_references(repo_uri: &str) -> Result<Vec<GitRef>> {
     let uri = format!("{repo_uri}/info/refs?service=git-upload-pack");
     let result = get(&uri).await?;
     let status = result.status();
@@ -35,9 +43,7 @@ async fn discover_references(repo_uri: &str) -> Result<()> {
 
     let references = process_ref_discovery_response(&response.slice(34..))?;
 
-    dbg!(references);
-
-    Ok(())
+    Ok(references)
 }
 
 fn validate_header(header: &Bytes) -> bool {
@@ -112,6 +118,66 @@ enum ReaderState {
     BranchName,
     Features,
 }
+
+async fn get_commit(commit_hash: &str, repo_uri: &str) -> Result<Bytes> {
+    let uri = format!("{repo_uri}/git-upload-pack");
+    let client = reqwest::Client::new();
+    let body = format!("0032want {commit_hash}\n00000009done\n");
+    let response = client
+        .post(uri)
+        .header("Content-Type", "application/x-git-upload-pack-request")
+        .body(body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        bail!("Error response when getting commit");
+    }
+
+    let body = response.bytes().await?;
+
+    Ok(body)
+}
+
+#[derive(Debug)]
+struct CommitRef {
+    head: String,
+    signature: String,
+    version: u32,
+    object_count: u32,
+}
+
+impl CommitRef {
+    pub fn new(commit: Bytes) -> Result<Self> {
+        // let head = std::str::from_utf8(&commit[0..8])?.to_owned();
+        // let signature = std::str::from_utf8(&commit[8..12])?.to_owned();
+        // let version = u32::from_be_bytes(commit[12..16].try_into()?);
+        // let object_count = u32::from_be_bytes(commit[16..20].try_into()?);
+        // let object_type = &commit[20..22];
+        // let object_type_header = format!("{object_type:b}");
+
+        // dbg!(&object_type_header[0..1]);
+        // dbg!(&object_type_header[1..4]); // type
+        // dbg!(&object_type_header[4..]);
+
+        // Ok(Self {
+        //     head,
+        //     signature,
+        //     version,
+        //     object_count,
+        // })
+        todo!()
+    }
+}
+
+// enum ObjectType {
+//     Commit,
+//     Unknown,
+// }
+
+// impl ObjectType {
+//     pub fn new(bits: &str) -> Self {}
+// }
 
 #[cfg(test)]
 mod tests {
