@@ -4,5 +4,6 @@ pub mod commit_tree;
 pub mod hash_object;
 pub mod init;
 pub mod ls_tree;
+pub mod process_packfile;
 pub mod utils;
 pub mod write_tree;

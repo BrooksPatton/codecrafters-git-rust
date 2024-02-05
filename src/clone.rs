@@ -1,27 +1,62 @@
 use anyhow::{bail, Result};
-use bytes::Buf;
 use bytes::Bytes;
+use flate2::read::ZlibDecoder;
 use reqwest::get;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Seek;
 use std::path::Path;
-use tokio::sync::broadcast;
+use std::path::PathBuf;
 
 use crate::init;
-use crate::utils;
+use crate::process_packfile::read_type_and_size;
+use crate::process_packfile::ObjectType;
 use crate::utils::create_directory;
-use crate::utils::decompress;
+use crate::utils::save_to_disk;
 
 pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
     // create directory
     let target_directory = Path::new(".").join(target_dir);
 
     create_directory(&target_directory)?;
-    init::init(target_directory);
+    init::init(target_directory.clone());
 
-    // let refs = discover_references(uri).await?;
-    // let commit = get_commit(&refs[0].commit_hash, uri).await?;
-    // let commit_ref = CommitRef::new(commit)?;
+    let refs = discover_references(uri).await?;
+    let commit = get_commit(&refs.last().unwrap().commit_hash, uri).await?;
+    dev_save_to_file(&commit)?;
+    let pack_file = Packfile::new(commit.slice(..21))?;
+    let mut cursed_packfile = Cursor::new(&commit[20..]);
 
-    // dbg!(commit_ref);
+    for _ in 0..pack_file.object_count {
+        let object_type = read_type_and_size(&mut cursed_packfile)?;
+
+        if matches!(object_type, ObjectType::Unknown) {
+            eprintln!(
+                "attempting to handle unknown object type: {:?}",
+                &object_type
+            );
+            break;
+        }
+
+        let current_cursed_packfile_position = cursed_packfile.position();
+        let mut decompressed_object = Vec::with_capacity(object_type.get_size().unwrap());
+        let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
+        decoder.read_to_end(&mut decompressed_object)?;
+        let count = decoder.total_in();
+
+        cursed_packfile.seek(std::io::SeekFrom::Start(
+            current_cursed_packfile_position + count,
+        ))?;
+        let header = format!(
+            "{} {}\0",
+            object_type.get_type(),
+            object_type.get_size().unwrap()
+        );
+        let mut commit = header.into_bytes();
+        commit.extend(decompressed_object);
+
+        let _hash = save_to_disk(&commit, target_directory.clone())?;
+    }
 
     Ok(())
 }
@@ -114,9 +149,6 @@ impl GitRef {
 enum ReaderState {
     #[default]
     Mode,
-    Hash,
-    BranchName,
-    Features,
 }
 
 async fn get_commit(commit_hash: &str, repo_uri: &str) -> Result<Bytes> {
@@ -140,44 +172,29 @@ async fn get_commit(commit_hash: &str, repo_uri: &str) -> Result<Bytes> {
 }
 
 #[derive(Debug)]
-struct CommitRef {
+#[allow(dead_code)]
+struct Packfile {
     head: String,
     signature: String,
     version: u32,
     object_count: u32,
 }
 
-impl CommitRef {
+impl Packfile {
     pub fn new(commit: Bytes) -> Result<Self> {
-        // let head = std::str::from_utf8(&commit[0..8])?.to_owned();
-        // let signature = std::str::from_utf8(&commit[8..12])?.to_owned();
-        // let version = u32::from_be_bytes(commit[12..16].try_into()?);
-        // let object_count = u32::from_be_bytes(commit[16..20].try_into()?);
-        // let object_type = &commit[20..22];
-        // let object_type_header = format!("{object_type:b}");
+        let head = std::str::from_utf8(&commit[0..8])?.to_owned();
+        let signature = std::str::from_utf8(&commit[8..12])?.to_owned();
+        let version = u32::from_be_bytes(commit[12..16].try_into()?);
+        let object_count = u32::from_be_bytes(commit[16..20].try_into()?);
 
-        // dbg!(&object_type_header[0..1]);
-        // dbg!(&object_type_header[1..4]); // type
-        // dbg!(&object_type_header[4..]);
-
-        // Ok(Self {
-        //     head,
-        //     signature,
-        //     version,
-        //     object_count,
-        // })
-        todo!()
+        Ok(Self {
+            head,
+            signature,
+            version,
+            object_count,
+        })
     }
 }
-
-// enum ObjectType {
-//     Commit,
-//     Unknown,
-// }
-
-// impl ObjectType {
-//     pub fn new(bits: &str) -> Self {}
-// }
 
 #[cfg(test)]
 mod tests {
@@ -249,4 +266,13 @@ mod tests {
 
         Ok(())
     }
+}
+
+fn dev_save_to_file(data: &Bytes) -> Result<()> {
+    let mut path = PathBuf::new();
+
+    path.push("testfile");
+    std::fs::write(path, data)?;
+
+    Ok(())
 }

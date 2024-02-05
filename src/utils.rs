@@ -49,16 +49,14 @@ pub fn get_hash(content: &[u8]) -> Result<Vec<u8>> {
     Ok(hash)
 }
 
-pub fn save_to_disk(content: &[u8]) -> Result<Vec<u8>> {
+pub fn save_to_disk(content: &[u8], mut path: PathBuf) -> Result<Vec<u8>> {
     let hash = get_hash(content)?;
     let compressed = compress(content)?;
     let hash_utf8 = hex::encode(&hash);
     let directory_name = get_object_directory_name(&hash_utf8);
     let file_name = get_object_file_name(&hash_utf8);
-    let mut path = PathBuf::new()
-        .join(".git")
-        .join("objects")
-        .join(directory_name);
+
+    path = path.join(".git").join("objects").join(directory_name);
 
     let Ok(directory_exists) = path.try_exists() else {
         bail!("Error checking if directory exists");

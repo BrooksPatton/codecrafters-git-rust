@@ -1,4 +1,4 @@
-use std::time::UNIX_EPOCH;
+use std::{path::PathBuf, time::UNIX_EPOCH};
 
 use anyhow::Result;
 use hex::ToHex;
@@ -31,7 +31,7 @@ pub fn commit_tree(tree: &str, parent: &str, message: &str) -> Result<String> {
 
     commit.extend(&commit_body);
 
-    let hash = save_to_disk(&commit)?;
+    let hash = save_to_disk(&commit, PathBuf::new())?;
 
     Ok(hash.encode_hex())
 }

@@ -55,7 +55,8 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
         Ok(None)
     } else {
         let tree_file = create_tree_file(&objects);
-        let hash = save_to_disk(&tree_file)?;
+        let path = PathBuf::new();
+        let hash = save_to_disk(&tree_file, path)?;
 
         Ok(Some(hash))
     }
