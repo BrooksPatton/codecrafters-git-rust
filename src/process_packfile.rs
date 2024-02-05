@@ -53,6 +53,11 @@ pub fn read_type_and_size<R: Read>(packfile_reader: &mut R) -> Result<ObjectType
 #[derive(Debug)]
 pub enum ObjectType {
     Commit(usize),
+    Tree(usize),
+    Blob(usize),
+    Tag(usize),
+    OfsDelta(usize),
+    RefDelta(usize),
     Unknown,
 }
 
@@ -60,21 +65,40 @@ impl ObjectType {
     pub fn new(object_type: u8, size: usize) -> Self {
         match object_type {
             1 => Self::Commit(size),
+            2 => Self::Tree(size),
+            3 => Self::Blob(size),
+            4 => Self::Tag(size),
+            6 => Self::OfsDelta(size),
+            7 => Self::RefDelta(size),
             _ => Self::Unknown,
         }
     }
 
     pub fn get_size(&self) -> Option<usize> {
-        match self {
-            Self::Commit(size) => Some(*size),
-            _ => None,
-        }
+        Some(*match self {
+            ObjectType::Commit(size) => size,
+            ObjectType::Tree(size) => size,
+            ObjectType::Blob(size) => size,
+            ObjectType::Tag(size) => size,
+            ObjectType::OfsDelta(size) => size,
+            ObjectType::RefDelta(size) => size,
+            ObjectType::Unknown => unreachable!(),
+        })
     }
 
     pub fn get_type(&self) -> &'static str {
         match self {
             Self::Commit(_) => "commit",
+            Self::Tree(_) => "tree",
             Self::Unknown => unreachable!(),
+            ObjectType::Blob(_) => "blob",
+            ObjectType::Tag(_) => "tag",
+            ObjectType::OfsDelta(_) => "ofsdelta",
+            ObjectType::RefDelta(_) => "refdelta",
         }
+    }
+
+    pub fn is_delta(&self) -> bool {
+        matches!(self, ObjectType::OfsDelta(_) | ObjectType::RefDelta(_))
     }
 }

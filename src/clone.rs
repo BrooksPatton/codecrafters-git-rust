@@ -23,42 +23,82 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
 
     let refs = discover_references(uri).await?;
     let commit = get_commit(&refs.last().unwrap().commit_hash, uri).await?;
-    dev_save_to_file(&commit)?;
     let pack_file = Packfile::new(commit.slice(..21))?;
     let mut cursed_packfile = Cursor::new(&commit[20..]);
 
     for _ in 0..pack_file.object_count {
         let object_type = read_type_and_size(&mut cursed_packfile)?;
 
-        if matches!(object_type, ObjectType::Unknown) {
-            eprintln!(
-                "attempting to handle unknown object type: {:?}",
-                &object_type
-            );
-            break;
-        }
-
-        let current_cursed_packfile_position = cursed_packfile.position();
-        let mut decompressed_object = Vec::with_capacity(object_type.get_size().unwrap());
-        let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
-        decoder.read_to_end(&mut decompressed_object)?;
-        let count = decoder.total_in();
-
-        cursed_packfile.seek(std::io::SeekFrom::Start(
-            current_cursed_packfile_position + count,
-        ))?;
-        let header = format!(
-            "{} {}\0",
-            object_type.get_type(),
-            object_type.get_size().unwrap()
-        );
-        let mut commit = header.into_bytes();
-        commit.extend(decompressed_object);
-
-        let _hash = save_to_disk(&commit, target_directory.clone())?;
+        let _hash = match &object_type {
+            ObjectType::Commit(size) => handle_normal_object_type(
+                *size,
+                "commit",
+                &mut cursed_packfile,
+                target_directory.clone(),
+            )?,
+            ObjectType::Tree(size) => handle_normal_object_type(
+                *size,
+                "tree",
+                &mut cursed_packfile,
+                target_directory.clone(),
+            )?,
+            ObjectType::Blob(size) => handle_normal_object_type(
+                *size,
+                "blob",
+                &mut cursed_packfile,
+                target_directory.clone(),
+            )?,
+            ObjectType::Tag(size) => handle_normal_object_type(
+                *size,
+                "tag",
+                &mut cursed_packfile,
+                target_directory.clone(),
+            )?,
+            ObjectType::OfsDelta(_) => {
+                handle_ofs_delta();
+                None
+            }
+            ObjectType::RefDelta(_) => {
+                handle_ref_delta();
+                None
+            }
+            ObjectType::Unknown => unreachable!(),
+        };
     }
 
     Ok(())
+}
+
+// Implement using delta instructions at https://dev.to/calebsander/git-internals-part-2-packfiles-1jg8
+fn handle_ofs_delta() {
+    eprintln!("attempting to handle ofs delta");
+}
+
+fn handle_ref_delta() {
+    eprintln!("attempting to handle ref delta");
+}
+
+fn handle_normal_object_type<R: Read + AsRef<[u8]>>(
+    size: usize,
+    object_type: &str,
+    mut cursed_packfile: &mut Cursor<R>,
+    target_directory: PathBuf,
+) -> Result<Option<Vec<u8>>> {
+    let current_cursed_packfile_position = cursed_packfile.position();
+    let mut decompressed_object = Vec::with_capacity(size);
+    let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
+    decoder.read_to_end(&mut decompressed_object)?;
+    let count = decoder.total_in();
+
+    cursed_packfile.seek(std::io::SeekFrom::Start(
+        current_cursed_packfile_position + count,
+    ))?;
+    let header = format!("{object_type} {size}\0",);
+    let mut commit = header.into_bytes();
+    commit.extend(decompressed_object);
+
+    let hash = save_to_disk(&commit, target_directory)?;
+    Ok(Some(hash))
 }
 
 async fn discover_references(repo_uri: &str) -> Result<Vec<GitRef>> {
@@ -266,13 +306,4 @@ mod tests {
 
         Ok(())
     }
-}
-
-fn dev_save_to_file(data: &Bytes) -> Result<()> {
-    let mut path = PathBuf::new();
-
-    path.push("testfile");
-    std::fs::write(path, data)?;
-
-    Ok(())
 }
