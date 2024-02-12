@@ -21,13 +21,13 @@ async fn main() {
             let write_flag = args[2].as_str() == "-w";
             let path = PathBuf::new().join(&args[3]);
             let checksum = hash_object(write_flag, path)
-                .unwrap()
+                .expect("error running hash object command")
                 .encode_hex::<String>();
             println!("{checksum:?}");
         }
         "ls-tree" => ls_tree(rest_of_args),
         "write-tree" => {
-            let checksum = write_tree().unwrap();
+            let checksum = write_tree().expect("error running write tree command");
             println!("{checksum}");
         }
         "commit-tree" => {
@@ -42,7 +42,7 @@ async fn main() {
             } else {
                 panic!("missing message argument");
             };
-            let hash = commit_tree(tree, parent, message).unwrap();
+            let hash = commit_tree(tree, parent, message).expect("error running hash command");
 
             println!("{hash}");
         }
@@ -50,7 +50,9 @@ async fn main() {
             let uri = &args[2];
             let target_directory = &args[3];
 
-            clone(uri, target_directory).await.unwrap();
+            clone(uri, target_directory)
+                .await
+                .expect("error running clone command");
         }
         _ => println!("unknown command: {}", args[1]),
     }

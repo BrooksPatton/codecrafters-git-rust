@@ -11,10 +11,11 @@ pub fn ls_tree(args: &[String]) {
         .join("objects")
         .join(directory_name)
         .join(file_name);
-    let mut file = File::open(path).unwrap();
+    let mut file = File::open(path).expect("error opening file");
     let mut compressed_bytes = vec![];
 
-    file.read_to_end(&mut compressed_bytes).unwrap();
+    file.read_to_end(&mut compressed_bytes)
+        .expect("error reading file to end");
 
     let mut bytes = decompress(&compressed_bytes).into_iter();
     let mut parser = TreeParser::Header;
@@ -80,7 +81,7 @@ impl TreeParser {
 
                     let byte = [next_byte];
 
-                    filename.push_str(std::str::from_utf8(&byte).unwrap());
+                    filename.push_str(std::str::from_utf8(&byte).expect("error pushing filename"));
                 }
 
                 *self = Self::Checksum;

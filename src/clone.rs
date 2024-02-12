@@ -1,7 +1,9 @@
+use anyhow::Context;
 use anyhow::{bail, Result};
 use bytes::Bytes;
 use flate2::read::ZlibDecoder;
 use reqwest::get;
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
@@ -9,8 +11,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::init;
-use crate::process_packfile::read_type_and_size;
-use crate::process_packfile::ObjectType;
+use crate::process_packfile::{apply_delta_instruction, ObjectType};
+use crate::process_packfile::{read_size_encoding, read_type_and_size};
 use crate::utils::create_directory;
 use crate::utils::save_to_disk;
 
@@ -18,16 +20,22 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
     // create directory
     let target_directory = Path::new(".").join(target_dir);
 
-    create_directory(&target_directory)?;
+    create_directory(&target_directory).context("create directory")?;
     init::init(target_directory.clone());
 
-    let refs = discover_references(uri).await?;
-    let commit = get_commit(&refs.last().unwrap().commit_hash, uri).await?;
-    let pack_file = Packfile::new(commit.slice(..21))?;
+    let refs = discover_references(uri)
+        .await
+        .context("discovering references")?;
+    let commit = get_commit(&refs.last().expect("getting commit bytes").commit_hash, uri)
+        .await
+        .context("getting commit")?;
+    let pack_file = Packfile::new(commit.slice(..21)).context("creating Packfile metadata")?;
     let mut cursed_packfile = Cursor::new(&commit[20..]);
+    let mut git_objects = HashMap::new();
 
     for _ in 0..pack_file.object_count {
-        let object_type = read_type_and_size(&mut cursed_packfile)?;
+        let object_type =
+            read_type_and_size(&mut cursed_packfile).context("reading type and size")?;
 
         let _hash = match &object_type {
             ObjectType::Commit(size) => handle_normal_object_type(
@@ -35,31 +43,41 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
                 "commit",
                 &mut cursed_packfile,
                 target_directory.clone(),
-            )?,
+                &mut git_objects,
+            )
+            .context("handling normal object type as commit")?,
             ObjectType::Tree(size) => handle_normal_object_type(
                 *size,
                 "tree",
                 &mut cursed_packfile,
                 target_directory.clone(),
-            )?,
+                &mut git_objects,
+            )
+            .context("handling normal object type as tree")?,
             ObjectType::Blob(size) => handle_normal_object_type(
                 *size,
                 "blob",
                 &mut cursed_packfile,
                 target_directory.clone(),
-            )?,
+                &mut git_objects,
+            )
+            .context("handling normal object type as blob")?,
             ObjectType::Tag(size) => handle_normal_object_type(
                 *size,
                 "tag",
                 &mut cursed_packfile,
                 target_directory.clone(),
-            )?,
+                &mut git_objects,
+            )
+            .context("handling normal object type as tag")?,
             ObjectType::OfsDelta(_) => {
                 handle_ofs_delta();
                 None
             }
-            ObjectType::RefDelta(_) => {
-                handle_ref_delta();
+            ObjectType::RefDelta(size) => {
+                handle_ref_delta(&mut cursed_packfile, &git_objects)
+                    .await
+                    .context("handling ref/hash delta")?;
                 None
             }
             ObjectType::Unknown => unreachable!(),
@@ -71,11 +89,66 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
 
 // Implement using delta instructions at https://dev.to/calebsander/git-internals-part-2-packfiles-1jg8
 fn handle_ofs_delta() {
-    eprintln!("attempting to handle ofs delta");
+    panic!("attempting to handle ofs delta");
 }
 
-fn handle_ref_delta() {
-    eprintln!("attempting to handle ref delta");
+async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
+    mut cursed_packfile: &mut Cursor<R>,
+    git_objects: &HashMap<Vec<u8>, Vec<u8>>,
+) -> Result<()> {
+    let mut hash = [0; 20];
+
+    cursed_packfile
+        .read(&mut hash)
+        .context("reading hash from cursed packfile")?;
+
+    let _current_cursed_packfile_position = cursed_packfile.position();
+    let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
+    let base_object_size = read_size_encoding(&mut decoder).context("reading base object size")?;
+    let new_object_size = read_size_encoding(&mut decoder).context("reading new object size")?;
+    let base = git_objects
+        .get(&hash.to_vec())
+        .expect("don't have git object");
+    let mut decompressed_object = Vec::with_capacity(new_object_size);
+
+    // decoder.read_to_end(&mut decompressed_object)?;
+
+    // let count = decoder.total_in();
+
+    // cursed_packfile.seek(std::io::SeekFrom::Start(
+    //     current_cursed_packfile_position + count,
+    // ))?;
+
+    loop {
+        let is_more = apply_delta_instruction(&mut decoder, &base, &mut decompressed_object)
+            .context("applying delta instruction")?;
+
+        if !is_more {
+            break;
+        }
+    }
+
+    dbg!(String::from_utf8(decompressed_object.to_owned())?);
+
+    panic!();
+
+    // let hash = hex::encode(hash);
+    // let packfile_bytes = get_commit(&hash, repo_uri)
+    //     .await
+    //     .context("getting commit from cursor")?;
+    // let _pack_file_meta =
+    //     Packfile::new(packfile_bytes.slice(..21)).context("creating packfile metadata")?;
+    // let mut packfile_cursor = Cursor::new(&packfile_bytes[20..]);
+    // let type_and_size =
+    //     read_type_and_size(&mut packfile_cursor).context("reading type and size")?;
+
+    // let mut blob = Vec::with_capacity(type_and_size.get_size().expect("missing size"));
+
+    // packfile_cursor
+    //     .read(&mut blob)
+    //     .context("reading blob data")?;
+
+    Ok(())
 }
 
 fn handle_normal_object_type<R: Read + AsRef<[u8]>>(
@@ -83,6 +156,7 @@ fn handle_normal_object_type<R: Read + AsRef<[u8]>>(
     object_type: &str,
     mut cursed_packfile: &mut Cursor<R>,
     target_directory: PathBuf,
+    git_objects: &mut HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<Option<Vec<u8>>> {
     let current_cursed_packfile_position = cursed_packfile.position();
     let mut decompressed_object = Vec::with_capacity(size);
@@ -98,6 +172,9 @@ fn handle_normal_object_type<R: Read + AsRef<[u8]>>(
     commit.extend(decompressed_object);
 
     let hash = save_to_disk(&commit, target_directory)?;
+
+    git_objects.insert(hash.clone(), commit);
+
     Ok(Some(hash))
 }
 

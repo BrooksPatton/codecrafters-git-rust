@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -20,7 +20,9 @@ pub fn decompress(bytes: &[u8]) -> Vec<u8> {
     let mut decoder = ZlibDecoder::new(bytes);
     let mut result = vec![];
 
-    decoder.read_to_end(&mut result).unwrap();
+    decoder
+        .read_to_end(&mut result)
+        .expect("error decompressing");
 
     result
 }
@@ -35,7 +37,9 @@ pub fn compress(content: &[u8]) -> Result<Vec<u8>> {
     let mut encoded = Vec::new();
     let mut encoder = ZlibEncoder::new(&mut encoded, Compression::default());
 
-    encoder.write_all(content)?;
+    encoder
+        .write_all(content)
+        .context("error write all compress")?;
 
     Ok(encoder.finish()?.to_owned())
 }

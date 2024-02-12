@@ -22,7 +22,9 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
     {
         let dir_object = object?;
         let file_path = dir_object.path();
-        let metadata = dir_object.metadata().unwrap();
+        let metadata = dir_object
+            .metadata()
+            .context("error getting directory metadata")?;
         let name = dir_object
             .file_name()
             .to_str()

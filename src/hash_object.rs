@@ -12,7 +12,7 @@ use sha1::{Digest, Sha1};
 // That way we can call this from write-tree function
 pub fn hash_object(write_flag: bool, path: PathBuf) -> Result<Vec<u8>> {
     if write_flag {
-        let file = std::fs::read(path).unwrap();
+        let file = std::fs::read(path).expect("error hashing object");
         let header = get_header(&file);
         let mut content = header.into_bytes();
 
@@ -37,8 +37,10 @@ fn get_sha(file: &[u8]) -> Vec<u8> {
 
 fn compress(file: &[u8]) -> Vec<u8> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(file).unwrap();
-    encoder.finish().unwrap()
+    encoder
+        .write_all(file)
+        .expect("error writing compressed bytes to encoder");
+    encoder.finish().expect("error finishing encoder")
 }
 
 fn create_folder(sha: &str) -> PathBuf {
@@ -46,7 +48,10 @@ fn create_folder(sha: &str) -> PathBuf {
     // let path = format!(".git/objects/{}", &sha[0..2]);
     let path = Path::new(".git").join("objects").join(&sha[0..2]);
     // we need to handle the case that the folder already exists. If that is so, we don't want to crash.
-    DirBuilder::new().recursive(true).create(&path).unwrap();
+    DirBuilder::new()
+        .recursive(true)
+        .create(&path)
+        .expect("error creating folder");
 
     path
 }
@@ -59,7 +64,7 @@ fn save_file(file: &[u8], mut path: PathBuf, file_sha: &str) {
         return;
     }
 
-    std::fs::write(path, file).unwrap();
+    std::fs::write(path, file).expect("error saving file");
 }
 
 fn get_file_sha(sha: &str) -> &str {
