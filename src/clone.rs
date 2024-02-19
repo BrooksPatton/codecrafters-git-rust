@@ -84,6 +84,16 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
         };
     }
 
+    save_git_objects(&git_objects, target_directory.clone())?;
+
+    Ok(())
+}
+
+fn save_git_objects(git_objects: &HashMap<Vec<u8>, Vec<u8>>, path: PathBuf) -> Result<()> {
+    for (git_object_hash, git_object) in git_objects {
+        save_to_disk(git_object, path.clone())?;
+    }
+
     Ok(())
 }
 
@@ -102,7 +112,7 @@ async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
         .read(&mut hash)
         .context("reading hash from cursed packfile")?;
 
-    let _current_cursed_packfile_position = cursed_packfile.position();
+    let current_cursed_packfile_position = cursed_packfile.position();
     let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
     let base_object_size = read_size_encoding(&mut decoder).context("reading base object size")?;
     let new_object_size = read_size_encoding(&mut decoder).context("reading new object size")?;
@@ -113,24 +123,20 @@ async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
 
     // decoder.read_to_end(&mut decompressed_object)?;
 
-    // let count = decoder.total_in();
-
-    // cursed_packfile.seek(std::io::SeekFrom::Start(
-    //     current_cursed_packfile_position + count,
-    // ))?;
-
     loop {
         let is_more = apply_delta_instruction(&mut decoder, &base, &mut decompressed_object)
             .context("applying delta instruction")?;
+        // dbg!(String::from_utf8(decompressed_object.to_owned())?);
 
         if !is_more {
             break;
         }
     }
 
-    dbg!(String::from_utf8(decompressed_object.to_owned())?);
-
-    panic!();
+    let count = decoder.total_in();
+    cursed_packfile.seek(std::io::SeekFrom::Start(
+        current_cursed_packfile_position + count,
+    ))?;
 
     // let hash = hex::encode(hash);
     // let packfile_bytes = get_commit(&hash, repo_uri)

@@ -121,7 +121,7 @@ impl ObjectType {
 pub fn read_bytes<R: Read, const N: usize>(stream: &mut R) -> std::io::Result<[u8; N]> {
     let mut bytes = [0; N];
 
-    stream.read_exact(&mut bytes);
+    stream.read_exact(&mut bytes)?;
 
     Ok(bytes)
 }
