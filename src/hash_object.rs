@@ -1,16 +1,16 @@
+use crate::hash::Hash;
+use anyhow::Result;
+use flate2::{write::ZlibEncoder, Compression};
+use sha1::{Digest, Sha1};
 use std::{
     fs::DirBuilder,
     io::Write,
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
-use flate2::{write::ZlibEncoder, Compression};
-use sha1::{Digest, Sha1};
-
 // Update hash object to take in a path, and go from there.
 // That way we can call this from write-tree function
-pub fn hash_object(write_flag: bool, path: PathBuf) -> Result<Vec<u8>> {
+pub fn hash_object(write_flag: bool, path: PathBuf) -> Result<Hash> {
     if write_flag {
         let file = std::fs::read(path).expect("error hashing object");
         let header = get_header(&file);
@@ -18,7 +18,7 @@ pub fn hash_object(write_flag: bool, path: PathBuf) -> Result<Vec<u8>> {
 
         content.extend(file);
 
-        let sha = get_sha(&content);
+        let sha = get_sha(&content).try_into()?;
         let sha_hex = hex::encode(&sha);
         let compressed_file = compress(&content);
         let folder_path = create_folder(&sha_hex);

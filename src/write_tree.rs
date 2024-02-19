@@ -1,3 +1,4 @@
+use crate::hash::Hash;
 use crate::{hash_object::hash_object, utils::save_to_disk};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
@@ -12,7 +13,7 @@ pub fn write_tree() -> Result<String> {
     Ok(hex::encode(checksum))
 }
 
-fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
+fn write_tree_object(path: &PathBuf) -> Result<Option<Hash>> {
     let mut objects = vec![];
     for object in WalkBuilder::new(&path)
         .hidden(false)
@@ -67,12 +68,12 @@ fn write_tree_object(path: &PathBuf) -> Result<Option<Vec<u8>>> {
 #[derive(Debug)]
 struct TreeObject {
     mode: String,
-    checksum: Vec<u8>,
+    checksum: Hash,
     name: String,
 }
 
 impl TreeObject {
-    pub fn new(is_file: bool, checksum: Vec<u8>, name: String, mode: u32) -> Self {
+    pub fn new(is_file: bool, checksum: Hash, name: String, mode: u32) -> Self {
         let object_type = TreeObjectType::new(is_file, mode);
         let mode = object_type.mode();
 

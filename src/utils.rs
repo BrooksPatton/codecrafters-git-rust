@@ -8,6 +8,8 @@ use std::{
     path::PathBuf,
 };
 
+use crate::hash::Hash;
+
 pub fn get_object_directory_name(hash: &str) -> String {
     hash[0..2].to_owned()
 }
@@ -44,16 +46,15 @@ pub fn compress(content: &[u8]) -> Result<Vec<u8>> {
     Ok(encoder.finish()?.to_owned())
 }
 
-pub fn get_hash(content: &[u8]) -> Result<Vec<u8>> {
+pub fn get_hash(content: &[u8]) -> Result<Hash> {
     let mut hasher = Sha1::new();
 
     hasher.update(content);
 
-    let hash = hasher.finalize()[..].to_vec();
-    Ok(hash)
+    Ok(Hash::new(hasher.finalize().into()))
 }
 
-pub fn save_to_disk(content: &[u8], mut path: PathBuf) -> Result<Vec<u8>> {
+pub fn save_to_disk(content: &[u8], mut path: PathBuf) -> Result<Hash> {
     let hash = get_hash(content)?;
     let compressed = compress(content)?;
     let hash_utf8 = hex::encode(&hash);
