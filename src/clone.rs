@@ -74,7 +74,7 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
                 handle_ofs_delta();
                 None
             }
-            ObjectType::RefDelta(size) => {
+            ObjectType::RefDelta(_) => {
                 handle_ref_delta(&mut cursed_packfile, &git_objects)
                     .await
                     .context("handling ref/hash delta")?;
@@ -90,7 +90,7 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
 }
 
 fn save_git_objects(git_objects: &HashMap<Vec<u8>, Vec<u8>>, path: PathBuf) -> Result<()> {
-    for (git_object_hash, git_object) in git_objects {
+    for git_object in git_objects.values() {
         save_to_disk(git_object, path.clone())?;
     }
 
@@ -114,7 +114,7 @@ async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
 
     let current_cursed_packfile_position = cursed_packfile.position();
     let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
-    let base_object_size = read_size_encoding(&mut decoder).context("reading base object size")?;
+    let _base_object_size = read_size_encoding(&mut decoder).context("reading base object size")?;
     let new_object_size = read_size_encoding(&mut decoder).context("reading new object size")?;
     let base = git_objects
         .get(&hash.to_vec())

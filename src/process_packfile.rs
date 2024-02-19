@@ -1,7 +1,6 @@
 // Implemented using https://dev.to/calebsander/git-internals-part-2-packfiles-1jg8 as a reference
 
-use anyhow::{anyhow, bail, Context, Error, Result};
-use core::panic;
+use anyhow::{bail, Context, Result};
 use std::io::{ErrorKind, Read};
 
 const VARINT_ENCODING_BITS: u8 = 7;
