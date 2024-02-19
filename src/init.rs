@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 pub fn init(mut path: PathBuf) {
     path.push(".git");
-    fs::create_dir(&path).expect("error creating .git directory");
+    fs::create_dir_all(&path).expect("error creating .git directory");
 
     let mut objects = path.clone();
     objects.push("objects");
