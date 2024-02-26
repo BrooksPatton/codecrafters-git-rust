@@ -2,7 +2,7 @@ use std::{borrow::Borrow, fmt::Display, ops::Deref};
 
 use anyhow::anyhow;
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Default)]
 pub struct Hash {
     hash: [u8; 20],
 }

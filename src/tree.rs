@@ -1,4 +1,6 @@
-use anyhow::{Context, Result};
+use core::panic;
+
+use anyhow::Result;
 
 use crate::hash::Hash;
 
@@ -6,35 +8,55 @@ pub struct Tree {
     tree_objects: Vec<TreeObject>,
 }
 
+impl Tree {
+    pub fn filenames(&self) -> Vec<&str> {
+        self.tree_objects
+            .iter()
+            .map(|tree_object| tree_object.filename.as_str())
+            .collect()
+    }
+}
+
 impl From<Vec<u8>> for Tree {
     fn from(value: Vec<u8>) -> Self {
         let mut tree_objects = vec![];
         let mut parser = TreeParser::Header;
-        let mut bytes = value.into_iter();
+        let mut lines = value.split(|&byte| byte == b'\0').skip(1);
+        let mut tree_object = TreeObject::default();
+        let line = lines.next();
 
-        // We need to rewrite the TreeParser step method AND
+        tree_object
+            .parse_mode_and_filename(line)
+            .expect("error parseing mode and filename");
+
+        dbg!(tree_object);
+        panic!();
+        // parser.parse(line);
+
+        // // We need to rewrite the TreeParser step method AND
         // this loop so that we can create tree objects for every line in the bytes
-        // currently each step is trying to get a filename from the line.
-        'parse_tree_objects: loop {
-            // don't like initializing here. But not sure right now the best place to put this
-            let mut tree_object = TreeObject::default();
-            if parser.step(&mut bytes, &mut tree_object)? {
-            } else {
-                if matches!(parser, TreeParser::Done) {
-                    break 'parse_filenames;
-                } else {
-                    continue;
-                };
-            };
+        // // currently each step is trying to get a filename from the line.
+        // let mut tree_object = TreeObject::default();
+        // loop {
+        //     // don't like initializing here. But not sure right now the best place to put this
+        //     if parser
+        //         .step(&mut bytes, &mut tree_object)
+        //         .expect("error stepping through tree")
+        //     {
+        //         break;
+        //     };
 
-            filenames.push(filename);
-        }
+        //     tree_objects.push(tree_object);
+        //     tree_object = TreeObject::default();
+        // }
 
-        filenames
+        // dbg!(&tree_objects);
+
+        Self { tree_objects }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TreeObject {
     mode: u32,
     object_type: TreeObjectType,
@@ -42,7 +64,27 @@ pub struct TreeObject {
     checksum: Hash,
 }
 
-#[derive(Default)]
+impl TreeObject {
+    pub fn parse_mode_and_filename(&mut self, bytes: Option<&[u8]>) -> Result<()> {
+        let Some(bytes) = bytes else { return Ok(()) };
+        let mut split_bytes = bytes.split(|&byte| byte == b' ');
+        let mode_as_bytes = split_bytes
+            .next()
+            .expect("missing mode when parseing mode and filename");
+        let mode = std::str::from_utf8(mode_as_bytes)?.parse()?;
+        let filename_as_bytes = split_bytes
+            .next()
+            .expect("missing filename when parseing mode and filename");
+        let filename = std::str::from_utf8(filename_as_bytes)?.to_owned();
+
+        self.mode = mode;
+        self.filename = filename;
+
+        Ok(())
+    }
+}
+
+#[derive(Default, Debug)]
 pub enum TreeObjectType {
     #[default]
     Blob,
@@ -59,6 +101,10 @@ enum TreeParser {
 }
 
 impl TreeParser {
+    pub fn parse(&mut self, bytes: Option<&[u8]>) {
+        dbg!(bytes);
+    }
+
     pub fn step<'a>(
         &mut self,
         mut bytes: impl Iterator<Item = u8>,
@@ -73,28 +119,31 @@ impl TreeParser {
 
                 if next_byte == b'\0' {
                     *self = Self::Mode;
-                    return false;
+                    return Ok(false);
                 }
             },
-            TreeParser::Mode => loop {
-                // We've only worked on MODE, need to rework we think
+            TreeParser::Mode => {
                 let mut mode = vec![];
-                let Some(next_byte) = bytes.next() else {
-                    panic!("unable to get next byte in Mode");
-                };
+                loop {
+                    // We've only worked on MODE, need to rework we think
+                    let Some(next_byte) = bytes.next() else {
+                        panic!("unable to get next byte in Mode");
+                    };
 
-                if next_byte == b' ' {
-                    let mode = String::from_utf8(mode)?;
-                    let mode = u32::from_str_radix(&mode, 8)?;
+                    if next_byte == b' ' {
+                        let mode = String::from_utf8(mode)?;
+                        let mode = mode.parse()?;
+                        dbg!(mode);
 
-                    tree_object.mode = mode;
-                    *self = Self::Filename;
+                        tree_object.mode = mode;
+                        *self = Self::Filename;
 
-                    return false;
-                } else {
-                    mode.push(next_byte);
+                        return Ok(false);
+                    } else {
+                        mode.push(next_byte);
+                    }
                 }
-            },
+            }
             TreeParser::Filename => {
                 let mut filename = String::new();
                 loop {
@@ -112,20 +161,20 @@ impl TreeParser {
                 }
 
                 *self = Self::Checksum;
-                return Some(filename);
+                return Ok(false);
             }
             TreeParser::Checksum => {
                 for _ in 0..21 {
                     if let None = bytes.next() {
                         *self = Self::Done;
-                        return None;
+                        return Ok(false);
                     }
                 }
 
                 *self = Self::Mode;
-                return None;
+                return Ok(false);
             }
-            TreeParser::Done => return None,
+            TreeParser::Done => return Ok(true),
         }
     }
 }

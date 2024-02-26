@@ -1,7 +1,7 @@
 use std::{fs::File, io::Read, path::Path};
 
 use crate::{
-    tree::parse_tree_from_bytes,
+    tree::Tree,
     utils::{decompress, get_object_directory_name, get_object_file_name},
 };
 
@@ -21,7 +21,9 @@ pub fn ls_tree(args: &[String]) {
         .expect("error reading file to end");
 
     let bytes = decompress(&compressed_bytes);
-    let filenames = parse_tree_from_bytes(bytes);
+    let tree = Tree::from(bytes);
 
-    filenames.iter().for_each(|filename| println!("{filename}"));
+    tree.filenames()
+        .iter()
+        .for_each(|filename| println!("{filename}"));
 }
