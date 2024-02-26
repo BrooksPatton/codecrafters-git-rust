@@ -1,6 +1,6 @@
 use core::panic;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use crate::hash::Hash;
 
@@ -21,12 +21,15 @@ impl From<Vec<u8>> for Tree {
     fn from(value: Vec<u8>) -> Self {
         let mut tree_objects = vec![];
         let mut parser = TreeParser::Header;
-        let mut lines = value.split(|&byte| byte == b'\0').skip(1);
+        let mut lines = value.split(|&byte| byte == b'\0');
         let mut tree_object = TreeObject::default();
-        let line = lines.next();
 
         tree_object
-            .parse_mode_and_filename(line)
+            .parse_header(lines.next())
+            .expect("error parseing header");
+
+        tree_object
+            .parse_mode_and_filename(lines.next())
             .expect("error parseing mode and filename");
 
         dbg!(tree_object);
@@ -65,8 +68,25 @@ pub struct TreeObject {
 }
 
 impl TreeObject {
+    pub fn parse_header(&mut self, bytes: Option<&[u8]>) -> Result<()> {
+        let Some(bytes) = bytes else {
+            bail!("missing bytes")
+        };
+        let mut split_bytes = bytes.split(|&byte| byte == b' ');
+        let type_as_bytes = split_bytes
+            .next()
+            .expect("missing type when parseing type and type");
+        let object_type = TreeObjectType::from(type_as_bytes);
+
+        self.object_type = object_type;
+
+        Ok(())
+    }
+
     pub fn parse_mode_and_filename(&mut self, bytes: Option<&[u8]>) -> Result<()> {
-        let Some(bytes) = bytes else { return Ok(()) };
+        let Some(bytes) = bytes else {
+            bail!("missing bytes")
+        };
         let mut split_bytes = bytes.split(|&byte| byte == b' ');
         let mode_as_bytes = split_bytes
             .next()
@@ -89,6 +109,19 @@ pub enum TreeObjectType {
     #[default]
     Blob,
     Tree,
+}
+
+impl From<&[u8]> for TreeObjectType {
+    fn from(value: &[u8]) -> Self {
+        let stringified = std::str::from_utf8(value)
+            .expect("Error: unable to extract tree object type string from bytes");
+
+        match stringified.to_lowercase().as_str() {
+            "blob" => Self::Blob,
+            "tree" => Self::Tree,
+            _ => unreachable!("attempting to extract tree object type, but not one of the types"),
+        }
+    }
 }
 
 #[derive(Debug)]
