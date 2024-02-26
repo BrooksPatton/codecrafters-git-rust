@@ -1,8 +1,10 @@
 use core::panic;
+use std::io::{Cursor, Read};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
+use flate2::read::ZlibDecoder;
 
-use crate::hash::Hash;
+use crate::{hash::Hash, process_packfile::ObjectType};
 
 pub struct Tree {
     tree_objects: Vec<TreeObject>,
@@ -21,19 +23,39 @@ impl From<Vec<u8>> for Tree {
     fn from(value: Vec<u8>) -> Self {
         let mut tree_objects = vec![];
         let mut parser = TreeParser::Header;
-        let mut lines = value.split(|&byte| byte == b'\0');
-        let mut tree_object = TreeObject::default();
+        let mut value_iter = value.iter();
+        let mut values = value_iter
+            .skip_while(|&&byte| byte != b'\0')
+            .skip(1)
+            .copied();
 
-        tree_object
-            .parse_header(lines.next())
-            .expect("error parseing header");
+        loop {
+            let mut tree_object = TreeObject::default();
 
-        tree_object
-            .parse_mode_and_filename(lines.next())
-            .expect("error parseing mode and filename");
+            tree_object
+                .extract_mode(&mut values)
+                .expect("Error extracting mode while creating tree");
 
-        dbg!(tree_object);
-        panic!();
+            tree_object.set_object_type();
+
+            tree_object
+                .extract_filename(&mut values)
+                .expect("Error extracting filename while creating tree");
+
+            // tree_object
+            //     .parse_mode_and_filename(lines.next())
+            //     .expect("error parseing mode and filename");
+
+            // tree_object
+            //     .parse_hash(lines.next())
+            //     .expect("error parseing hash");
+
+            tree_objects.push(tree_object);
+
+            dbg!(&tree_objects);
+            panic!();
+        }
+
         // parser.parse(line);
 
         // // We need to rewrite the TreeParser step method AND
@@ -68,17 +90,34 @@ pub struct TreeObject {
 }
 
 impl TreeObject {
-    pub fn parse_header(&mut self, bytes: Option<&[u8]>) -> Result<()> {
-        let Some(bytes) = bytes else {
-            bail!("missing bytes")
-        };
-        let mut split_bytes = bytes.split(|&byte| byte == b' ');
-        let type_as_bytes = split_bytes
-            .next()
-            .expect("missing type when parseing type and type");
-        let object_type = TreeObjectType::from(type_as_bytes);
+    pub fn extract_mode(&mut self, bytes: &mut impl Iterator<Item = u8>) -> Result<()> {
+        let mut mode_bytes = Vec::new();
 
-        self.object_type = object_type;
+        for byte in bytes {
+            if byte == b' ' {
+                break;
+            }
+
+            mode_bytes.push(byte);
+        }
+
+        self.mode = String::from_utf8(mode_bytes)?.parse()?;
+
+        Ok(())
+    }
+
+    pub fn set_object_type(&mut self) {
+        self.object_type = TreeObjectType::from(self.mode);
+    }
+
+    pub fn extract_filename(&mut self, bytes: &mut impl Iterator<Item = u8>) -> Result<()> {
+        let mut filename_bytes = vec![];
+
+        for byte in bytes.take_while(|&byte| byte != b'\0') {
+            filename_bytes.push(byte);
+        }
+
+        self.filename = String::from_utf8(filename_bytes).context("extracting filename")?;
 
         Ok(())
     }
@@ -102,6 +141,17 @@ impl TreeObject {
 
         Ok(())
     }
+
+    pub fn parse_hash(&mut self, bytes: Option<&[u8]>) -> Result<()> {
+        let Some(bytes) = bytes else {
+            bail!("missing hash when parseing hash")
+        };
+        let hash = Hash::new(bytes[0..20].try_into()?);
+
+        self.checksum = hash;
+
+        Ok(())
+    }
 }
 
 #[derive(Default, Debug)]
@@ -111,14 +161,11 @@ pub enum TreeObjectType {
     Tree,
 }
 
-impl From<&[u8]> for TreeObjectType {
-    fn from(value: &[u8]) -> Self {
-        let stringified = std::str::from_utf8(value)
-            .expect("Error: unable to extract tree object type string from bytes");
-
-        match stringified.to_lowercase().as_str() {
-            "blob" => Self::Blob,
-            "tree" => Self::Tree,
+impl From<u32> for TreeObjectType {
+    fn from(value: u32) -> Self {
+        match value {
+            100644 | 644 | 755 => Self::Blob,
+            40000 => Self::Tree,
             _ => unreachable!("attempting to extract tree object type, but not one of the types"),
         }
     }
