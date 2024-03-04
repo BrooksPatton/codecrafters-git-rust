@@ -1,10 +1,6 @@
-use core::panic;
-use std::io::{Cursor, Read};
-
+use crate::hash::Hash;
 use anyhow::{bail, Context, Result};
-use flate2::read::ZlibDecoder;
-
-use crate::{hash::Hash, process_packfile::ObjectType};
+use std::fmt::Display;
 
 pub struct Tree {
     tree_objects: Vec<TreeObject>,
@@ -22,14 +18,18 @@ impl Tree {
 impl From<Vec<u8>> for Tree {
     fn from(value: Vec<u8>) -> Self {
         let mut tree_objects = vec![];
-        let mut parser = TreeParser::Header;
-        let mut value_iter = value.iter();
+        let value_iter = value.iter();
         let mut values = value_iter
             .skip_while(|&&byte| byte != b'\0')
             .skip(1)
-            .copied();
+            .copied()
+            .peekable();
 
         loop {
+            if let None = values.peek() {
+                break;
+            };
+
             let mut tree_object = TreeObject::default();
 
             tree_object
@@ -46,14 +46,11 @@ impl From<Vec<u8>> for Tree {
             //     .parse_mode_and_filename(lines.next())
             //     .expect("error parseing mode and filename");
 
-            // tree_object
-            //     .parse_hash(lines.next())
-            //     .expect("error parseing hash");
+            tree_object
+                .parse_hash(&mut values)
+                .expect("error parseing hash");
 
             tree_objects.push(tree_object);
-
-            dbg!(&tree_objects);
-            panic!();
         }
 
         // parser.parse(line);
@@ -142,15 +139,32 @@ impl TreeObject {
         Ok(())
     }
 
-    pub fn parse_hash(&mut self, bytes: Option<&[u8]>) -> Result<()> {
-        let Some(bytes) = bytes else {
-            bail!("missing hash when parseing hash")
-        };
-        let hash = Hash::new(bytes[0..20].try_into()?);
+    pub fn parse_hash(&mut self, bytes: &mut impl Iterator<Item = u8>) -> Result<()> {
+        let mut hash_bytes = [0; 20];
+
+        for index in 0..20 {
+            let byte = bytes
+                .next()
+                .context("missing byte when extracting the hash")?;
+
+            hash_bytes[index] = byte;
+        }
+
+        let hash = Hash::new(hash_bytes);
 
         self.checksum = hash;
 
         Ok(())
+    }
+}
+
+impl Display for TreeObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {:?} {}\t{}",
+            self.mode, self.object_type, self.checksum, &self.filename
+        )
     }
 }
 
@@ -164,97 +178,9 @@ pub enum TreeObjectType {
 impl From<u32> for TreeObjectType {
     fn from(value: u32) -> Self {
         match value {
-            100644 | 644 | 755 => Self::Blob,
+            100644 | 644 | 755 | 100755 => Self::Blob,
             40000 => Self::Tree,
             _ => unreachable!("attempting to extract tree object type, but not one of the types"),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum TreeParser {
-    Header,
-    Mode,
-    Filename,
-    Checksum,
-    Done,
-}
-
-impl TreeParser {
-    pub fn parse(&mut self, bytes: Option<&[u8]>) {
-        dbg!(bytes);
-    }
-
-    pub fn step<'a>(
-        &mut self,
-        mut bytes: impl Iterator<Item = u8>,
-        tree_object: &mut TreeObject,
-        // probably need a different return value, current thinking is to have it return "I am done or not, but don't like it."
-    ) -> Result<bool> {
-        match self {
-            Self::Header => loop {
-                let Some(next_byte) = bytes.next() else {
-                    panic!("unable to get next byte in Header");
-                };
-
-                if next_byte == b'\0' {
-                    *self = Self::Mode;
-                    return Ok(false);
-                }
-            },
-            TreeParser::Mode => {
-                let mut mode = vec![];
-                loop {
-                    // We've only worked on MODE, need to rework we think
-                    let Some(next_byte) = bytes.next() else {
-                        panic!("unable to get next byte in Mode");
-                    };
-
-                    if next_byte == b' ' {
-                        let mode = String::from_utf8(mode)?;
-                        let mode = mode.parse()?;
-                        dbg!(mode);
-
-                        tree_object.mode = mode;
-                        *self = Self::Filename;
-
-                        return Ok(false);
-                    } else {
-                        mode.push(next_byte);
-                    }
-                }
-            }
-            TreeParser::Filename => {
-                let mut filename = String::new();
-                loop {
-                    let Some(next_byte) = bytes.next() else {
-                        panic!("unable to get next byte in Filename");
-                    };
-
-                    if next_byte == b'\0' {
-                        break;
-                    }
-
-                    let byte = [next_byte];
-
-                    filename.push_str(std::str::from_utf8(&byte).expect("error pushing filename"));
-                }
-
-                *self = Self::Checksum;
-                return Ok(false);
-            }
-            TreeParser::Checksum => {
-                for _ in 0..21 {
-                    if let None = bytes.next() {
-                        *self = Self::Done;
-                        return Ok(false);
-                    }
-                }
-
-                *self = Self::Mode;
-                return Ok(false);
-            }
-            TreeParser::Done => return Ok(true),
         }
     }
 }
