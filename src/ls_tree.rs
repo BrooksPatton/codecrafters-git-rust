@@ -1,8 +1,10 @@
 use std::{fs::File, io::Read, path::Path};
 
+use anyhow::Context;
+
 use crate::{
     tree::Tree,
-    utils::{decompress, get_object_directory_name, get_object_file_name},
+    utils::{decompress, get_object_directory_name, get_object_file_name, remove_header},
 };
 
 pub fn ls_tree(args: &[String]) {
@@ -21,7 +23,11 @@ pub fn ls_tree(args: &[String]) {
         .expect("error reading file to end");
 
     let bytes = decompress(&compressed_bytes);
-    let tree = Tree::from(bytes);
+    let tree = Tree::from(
+        remove_header(&bytes)
+            .context("removing header")
+            .expect("attempting to remove header"),
+    );
 
     tree.filenames()
         .iter()

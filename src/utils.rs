@@ -90,6 +90,14 @@ pub fn create_directory(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+pub fn remove_header(bytes: &[u8]) -> Result<&[u8]> {
+    let index = bytes
+        .iter()
+        .position(|&byte| byte == b'\0')
+        .context("finding index of null to remove header")?;
+    Ok(&bytes[index + 1..])
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -148,14 +156,14 @@ mod tests {
         assert_eq!(result, expected_result);
     }
 
-    // #[test]
-    // fn should_get_hash_from_string() -> Result<()> {
-    //     let string_to_hash = b"hello world\n";
-    //     let expected_result = "22596363b3de40b06f981fb85d82312e8c0ed511";
-    //     let result = get_hash(string_to_hash)?;
+    #[test]
+    fn should_remove_header() -> Result<()> {
+        let string = "blob 324\0fup8ljhshrne";
+        let string_bytes = string.as_bytes();
+        let expected_result = "fup8ljhshrne".as_bytes();
+        let result = remove_header(string_bytes)?;
 
-    //     assert_eq!(result, expected_result);
-
-    //     Ok(())
-    // }
+        assert_eq!(expected_result, result);
+        Ok(())
+    }
 }

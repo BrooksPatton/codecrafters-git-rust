@@ -2,8 +2,9 @@ use crate::hash::Hash;
 use anyhow::{bail, Context, Result};
 use std::fmt::Display;
 
+#[derive(Debug)]
 pub struct Tree {
-    tree_objects: Vec<TreeObject>,
+    pub tree_objects: Vec<TreeObject>,
 }
 
 impl Tree {
@@ -15,15 +16,11 @@ impl Tree {
     }
 }
 
-impl From<Vec<u8>> for Tree {
-    fn from(value: Vec<u8>) -> Self {
+impl From<&[u8]> for Tree {
+    fn from(value: &[u8]) -> Self {
         let mut tree_objects = vec![];
         let value_iter = value.iter();
-        let mut values = value_iter
-            .skip_while(|&&byte| byte != b'\0')
-            .skip(1)
-            .copied()
-            .peekable();
+        let mut values = value_iter.copied().peekable();
 
         loop {
             if let None = values.peek() {
@@ -60,9 +57,9 @@ impl From<Vec<u8>> for Tree {
 #[derive(Default, Debug)]
 pub struct TreeObject {
     mode: u32,
-    object_type: TreeObjectType,
-    filename: String,
-    checksum: Hash,
+    pub object_type: TreeObjectType,
+    pub filename: String,
+    pub checksum: Hash,
 }
 
 impl TreeObject {
