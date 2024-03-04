@@ -158,7 +158,7 @@ pub fn apply_delta_instruction<R: Read>(
 
     if instruction & COPY_INSTRUCTION_FLAG == 0 {
         if instruction == 0 {
-            dbg!("got bad instruction :(");
+            eprintln!("got bad instruction :(");
             bail!("invalid data instruction");
         }
 

@@ -53,27 +53,6 @@ impl From<Vec<u8>> for Tree {
             tree_objects.push(tree_object);
         }
 
-        // parser.parse(line);
-
-        // // We need to rewrite the TreeParser step method AND
-        // this loop so that we can create tree objects for every line in the bytes
-        // // currently each step is trying to get a filename from the line.
-        // let mut tree_object = TreeObject::default();
-        // loop {
-        //     // don't like initializing here. But not sure right now the best place to put this
-        //     if parser
-        //         .step(&mut bytes, &mut tree_object)
-        //         .expect("error stepping through tree")
-        //     {
-        //         break;
-        //     };
-
-        //     tree_objects.push(tree_object);
-        //     tree_object = TreeObject::default();
-        // }
-
-        // dbg!(&tree_objects);
-
         Self { tree_objects }
     }
 }

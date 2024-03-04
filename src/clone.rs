@@ -14,7 +14,7 @@ use crate::hash::Hash;
 use crate::process_packfile::{apply_delta_instruction, ObjectType};
 use crate::process_packfile::{read_size_encoding, read_type_and_size};
 use crate::utils::create_directory;
-use crate::utils::save_to_disk;
+use crate::utils::{get_hash, save_to_disk};
 use crate::{checkout, init};
 
 pub type GitObjects = HashMap<Hash, Vec<u8>>;
@@ -79,7 +79,7 @@ pub async fn clone(uri: &str, target_dir: &str) -> Result<()> {
                 None
             }
             ObjectType::RefDelta(_) => {
-                handle_ref_delta(&mut cursed_packfile, &git_objects)
+                handle_ref_delta(&mut cursed_packfile, &mut git_objects)
                     .await
                     .context("handling ref/hash delta")?;
                 None
@@ -110,7 +110,7 @@ fn handle_ofs_delta() {
 
 async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
     mut cursed_packfile: &mut Cursor<R>,
-    git_objects: &GitObjects,
+    git_objects: &mut GitObjects,
 ) -> Result<()> {
     let mut hash = [0; 20];
 
@@ -122,7 +122,9 @@ async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
     let mut decoder = ZlibDecoder::new(&mut cursed_packfile);
     let _base_object_size = read_size_encoding(&mut decoder).context("reading base object size")?;
     let new_object_size = read_size_encoding(&mut decoder).context("reading new object size")?;
-    let base = git_objects.get(&hash).expect("don't have git object");
+    let base = git_objects
+        .get(&hash)
+        .context("missing base object when handling ref delta")?;
     let mut decompressed_object = Vec::with_capacity(new_object_size);
 
     loop {
@@ -133,6 +135,14 @@ async fn handle_ref_delta<R: Read + AsRef<[u8]>>(
             break;
         }
     }
+
+    let mut header = format!("blob {}\0", decompressed_object.len()).into_bytes();
+
+    header.extend_from_slice(&decompressed_object);
+
+    let hash = get_hash(&header).context("getting hash")?;
+
+    git_objects.insert(hash, decompressed_object);
 
     let count = decoder.total_in();
     cursed_packfile
@@ -166,11 +176,11 @@ fn handle_normal_object_type<R: Read + AsRef<[u8]>>(
         .context("skipping bytes that we read")?;
     let header = format!("{object_type} {size}\0",);
     let mut commit = header.into_bytes();
-    commit.extend(decompressed_object);
+    commit.extend(decompressed_object.clone());
 
     let hash = save_to_disk(&commit, target_directory).context("saving normal object to disk")?;
 
-    git_objects.insert(hash.clone(), commit);
+    git_objects.insert(hash.clone(), decompressed_object);
 
     Ok(Some(hash))
 }
