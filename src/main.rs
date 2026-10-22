@@ -1,6 +1,5 @@
-#[allow(unused_imports)]
+
 use std::env;
-#[allow(unused_imports)]
 use std::fs;
 
 fn main() {
